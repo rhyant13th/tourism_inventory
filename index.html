@@ -92,7 +92,7 @@
   .pill-danger{background:var(--danger-soft);color:var(--danger);}
   .pill-grey{background:#EDEFEE;color:var(--subtext);}
 
-  input[type=text], input[type=date], input, select{
+  input[type=text], input[type=date], input[type=email], input, select{
     width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;color:var(--text);background:#fff;outline:none;font-family:inherit;
   }
   input:focus, select:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft);}
@@ -119,7 +119,7 @@
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react">
-const { useState, useMemo, useRef } = React;
+const { useState, useEffect, useMemo, useRef } = React;
 
 /* ---------- backup / export helpers ---------- */
 function pad(n){ return String(n).padStart(2,"0"); }
@@ -229,10 +229,6 @@ const ATTRACTION_CATEGORIES = {
 };
 
 const PIE_COLORS = ["#1C6B6E","#C08A2E","#0E3B3C","#2B7A57","#A8442D","#8A9B97"];
-
-/* ---------- seed data ---------- */
-const seedEstablishments = [];
-const seedAttractions = [];
 
 /* ---------- small icons (inline SVG) ---------- */
 const Icon = ({d, size=16, color="currentColor"}) => (
@@ -377,14 +373,9 @@ function EstablishmentForm({initial, onCancel, onSave}){
           {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
         </select>
       </Field>
-	  <Field label="Proprietor / Owner">
-  <input
-    type="text"
-    value={f.proprietor}
-    onChange={set("proprietor")}
-    placeholder="Full name of proprietor or owner"
-  />
-</Field>
+      <Field label="Proprietor / Owner">
+        <input type="text" value={f.proprietor} onChange={set("proprietor")} placeholder="Full name of proprietor or owner" />
+      </Field>
       <Field label="Classification" required>
         <select value={f.classification} onChange={set("classification")}>
           <option value="">Select classification</option>
@@ -400,14 +391,9 @@ function EstablishmentForm({initial, onCancel, onSave}){
       <Field label="Address"><input type="text" value={f.address} onChange={set("address")} placeholder="Street, Barangay" /></Field>
       <Field label="Contact Number"><input type="text" value={f.contact} onChange={set("contact")} placeholder="09XX-XXX-XXXX" /></Field>
       <Field label="Email Address">
-  <input
-    type="email"
-    value={f.email}
-    onChange={set("email")}
-    placeholder="example@email.com"
-  />
-</Field>
-	  <Field label="Number of Rooms"><input type="text" value={f.rooms} onChange={set("rooms")} placeholder="0" /></Field>
+        <input type="email" value={f.email} onChange={set("email")} placeholder="example@email.com" />
+      </Field>
+      <Field label="Number of Rooms"><input type="text" value={f.rooms} onChange={set("rooms")} placeholder="0" /></Field>
       <Field label="Male Employees"><input type="text" value={f.maleEmployees} onChange={set("maleEmployees")} placeholder="0" /></Field>
       <Field label="Female Employees"><input type="text" value={f.femaleEmployees} onChange={set("femaleEmployees")} placeholder="0" /></Field>
       <Field label="Remarks"><input type="text" value={f.remarks} onChange={set("remarks")} placeholder="Optional remarks" /></Field>
@@ -460,14 +446,13 @@ function AttractionForm({initial, onCancel, onSave}){
   };
   return (<div>
     <div className="form-grid">
-      <Field label="Name of Establishment" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Bayfront Hotel" /></Field>
+      <Field label="Name of Attraction" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Apo Reef Natural Park" /></Field>
       <Field label="Municipality" required>
         <select value={f.municipality} onChange={set("municipality")}>
           <option value="">Select municipality</option>
           {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
         </select>
       </Field>
-      <Field label="Name of Attraction" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Taal Volcano Viewpoint" /></Field>
       <Field label="Year Established"><input type="text" value={f.yearEstablished} onChange={set("yearEstablished")} placeholder="e.g. 1930" /></Field>
       <Field label="Status">
         <select value={f.selection} onChange={set("selection")}>
@@ -486,8 +471,8 @@ function AttractionForm({initial, onCancel, onSave}){
           {codeOptions.map(o=><option key={o.code} value={o.code}>{o.code} — {o.label}</option>)}
         </select>
       </Field>
-      <Field label="Latitude"><input type="text" value={f.latitude} onChange={set("latitude")} placeholder="e.g. 14.1153" /></Field>
-      <Field label="Longitude"><input type="text" value={f.longitude} onChange={set("longitude")} placeholder="e.g. 120.9822" /></Field>
+      <Field label="Latitude"><input type="text" value={f.latitude} onChange={set("latitude")} placeholder="e.g. 13.0667" /></Field>
+      <Field label="Longitude"><input type="text" value={f.longitude} onChange={set("longitude")} placeholder="e.g. 120.4833" /></Field>
     </div>
     <div className="form-actions">
       <button className="btn" onClick={onCancel}>Cancel</button>
@@ -738,11 +723,36 @@ function AttractionsSection({data, setData}){
 /* ---------- app shell ---------- */
 function App(){
   const [section, setSection] = useState("establishments");
-  const [establishments, setEstablishments] = useState([]);
-  const [attractions, setAttractions] = useState([]);
-  const [savedAt, setSavedAt] = useState(null);
-  const fileHandleRef = useRef(null);
+  const [establishments, setEstablishments] = useState(() => {
+    try {
+      const local = localStorage.getItem("tourism_establishments");
+      return local ? JSON.parse(local) : [];
+    } catch(e) { return []; }
+  });
+  const [attractions, setAttractions] = useState(() => {
+    try {
+      const local = localStorage.getItem("tourism_attractions");
+      return local ? JSON.parse(local) : [];
+    } catch(e) { return []; }
+  });
+  
+  const [savedAt, setSavedAt] = useState(() => {
+    const ts = localStorage.getItem("tourism_last_saved");
+    return ts ? new Date(ts) : null;
+  });
+
   const restoreInputRef = useRef(null);
+
+  // Auto-save data locally whenever establishments or attractions change
+  useEffect(() => {
+    try {
+      localStorage.setItem("tourism_establishments", JSON.stringify(establishments));
+      localStorage.setItem("tourism_attractions", JSON.stringify(attractions));
+      const now = new Date();
+      localStorage.setItem("tourism_last_saved", now.toISOString());
+      setSavedAt(now);
+    } catch(e) { console.error("LocalStorage write failed:", e); }
+  }, [establishments, attractions]);
 
   const buildPayload = () => ({
     type: "tourism-inventory-backup",
@@ -755,33 +765,6 @@ function App(){
   const downloadBackup = () => {
     const blob = new Blob([JSON.stringify(buildPayload(), null, 2)], {type:"application/json"});
     triggerDownload(blob, "tourism-inventory-backup-"+timestamp()+".json");
-    setSavedAt(new Date());
-  };
-
-  const handleSave = async () => {
-    // Uses the File System Access API when the browser supports it, so repeat
-    // saves overwrite the same file instead of downloading a new copy each time.
-    if (window.showSaveFilePicker) {
-      try {
-        let handle = fileHandleRef.current;
-        if (!handle) {
-          handle = await window.showSaveFilePicker({
-            suggestedName: "tourism-inventory-backup.json",
-            types: [{ description: "JSON Backup", accept: { "application/json": [".json"] } }],
-          });
-          fileHandleRef.current = handle;
-        }
-        const writable = await handle.createWritable();
-        await writable.write(JSON.stringify(buildPayload(), null, 2));
-        await writable.close();
-        setSavedAt(new Date());
-        return;
-      } catch (err) {
-        if (err && err.name === "AbortError") return;
-        // fall through to plain download if the picker/write failed
-      }
-    }
-    downloadBackup();
   };
 
   const handleRestoreFile = (e) => {
@@ -798,9 +781,7 @@ function App(){
         if (!window.confirm("Restoring this backup will replace all current establishments and attractions. Continue?")) return;
         setEstablishments(parsed.establishments);
         setAttractions(parsed.attractions);
-        fileHandleRef.current = null;
-        setSavedAt(null);
-        alert("Backup restored.");
+        alert("Backup restored successfully.");
       } catch (err) {
         alert("Couldn't read that file — make sure it's a backup exported from this tool.");
       }
@@ -814,14 +795,16 @@ function App(){
     const estRows = establishments.map(d => ({
       "Municipality": d.municipality,
       "Name of Establishment": d.name,
+      "Proprietor / Owner": d.proprietor || "",
       "Classification": d.classification,
       "Type": d.type,
       "Address": d.address,
+      "Contact Number": d.contact,
+      "Email Address": d.email || "",
       "Number of Rooms": d.rooms,
       "Male Employees": d.maleEmployees,
       "Female Employees": d.femaleEmployees,
       "Remarks": d.remarks,
-      "Contact Number": d.contact,
       "Accreditation Status": d.accredStatus,
       "Accreditation Number": d.accredNumber,
       "Accreditation Validity": d.accredValidity,
@@ -857,16 +840,15 @@ function App(){
     <p className="subtitle">Record tourism-related establishments and attractions, keep accreditation status current, and monitor coverage across municipalities.</p>
 
     <div className="data-toolbar">
-      <button className="btn btn-primary" onClick={handleSave}>Save</button>
-      <button className="btn btn-outline-teal" onClick={downloadBackup}>Download Backup (.json)</button>
+      <button className="btn btn-primary" onClick={downloadBackup}>Download Backup (.json)</button>
       <button className="btn btn-outline-teal" onClick={()=>restoreInputRef.current && restoreInputRef.current.click()}>Restore Backup</button>
       <input ref={restoreInputRef} type="file" accept=".json,application/json" onChange={handleRestoreFile} />
       <button className="btn btn-outline-gold" onClick={exportExcel}>Download as Excel (.xlsx)</button>
       
-      <div className="grow">{savedAt ? (<span>Last saved <b>{savedAt.toLocaleString()}</b></span>) : "Not saved this session yet"}</div>
+      <div className="grow">{savedAt ? (<span>Auto-saved locally: <b>{savedAt.toLocaleTimeString()}</b></span>) : "No entries yet"}</div>
     </div>
     <p style={{fontSize:12,color:"var(--subtext)",marginTop:8}}>
-      Refreshing this page always starts from a blank inventory — it can't remember data on its own. Click <b>Save</b> or <b>Download Backup</b> before you close the tab, then use <b>Restore Backup</b> to load that file back in next time you open this page.
+      Data auto-saves locally in your browser. Download a <b>JSON Backup</b> to transfer or keep off-site copies.
     </p>
 
     <div className="section-tabs">
