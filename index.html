@@ -1,6 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Firebase SDKs (Compat version) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<!-- Initialize Firebase & Firestore -->
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAhfpg6aVJlazzuyelcPILDzEVtqdlBrKw",
+    authDomain: "tourism-inventory-e44d0.firebaseapp.com",
+    projectId: "tourism-inventory-e44d0",
+    storageBucket: "tourism-inventory-e44d0.firebasestorage.app",
+    messagingSenderId: "269769924283",
+    appId: "1:269769924283:web:39be26bb7ef751fabb539e"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  window.db = firebase.firestore();
+</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Tourism Establishment &amp; Attraction Inventory</title>
