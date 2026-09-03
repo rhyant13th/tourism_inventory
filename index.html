@@ -1,159 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tourism Establishment &amp; Attraction Inventory</title>
+
   <!-- Firebase SDKs (Compat version) -->
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-<!-- Initialize Firebase & Firestore -->
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyAhfpg6aVJlazzuyelcPILDzEVtqdlBrKw",
-    authDomain: "tourism-inventory-e44d0.firebaseapp.com",
-    projectId: "tourism-inventory-e44d0",
-    storageBucket: "tourism-inventory-e44d0.firebasestorage.app",
-    messagingSenderId: "269769924283",
-    appId: "1:269769924283:web:39be26bb7ef751fabb539e"
-  };
+  <!-- Initialize Firebase & Firestore -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAhfpg6aVJlazzuyelcPILDzEVtqdlBrKw",
+      authDomain: "tourism-inventory-e44d0.firebaseapp.com",
+      projectId: "tourism-inventory-e44d0",
+      storageBucket: "tourism-inventory-e44d0.firebasestorage.app",
+      messagingSenderId: "269769924283",
+      appId: "1:269769924283:web:39be26bb7ef751fabb539e"
+    };
 
-  firebase.initializeApp(firebaseConfig);
-  window.db = firebase.firestore();
-</script>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Tourism Establishment &amp; Attraction Inventory</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style>
-  :root{
-    --navy:#0E3B3C; --navy-deep:#092726; --teal:#1C6B6E; --teal-soft:#DCEBE9;
-    --gold:#C08A2E; --gold-soft:#F2E2C1; --bg:#F4F6F5; --card:#FFFFFF;
-    --border:#DFE5E3; --text:#16211F; --subtext:#5E6E6A; --danger:#A8442D;
-    --danger-soft:#F3E0DA; --success:#2B7A57;
-  }
-  *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',ui-sans-serif,system-ui,-apple-system,sans-serif;}
-  h1,h2,h3{font-family:Georgia,'Iowan Old Style','Times New Roman',serif;margin:0;}
-  .app{max-width:1200px;margin:0 auto;padding:24px 16px 60px;}
-  .eyebrow{font-size:12px;font-weight:600;color:var(--teal);letter-spacing:.03em;margin-bottom:4px;}
-  .title{font-size:30px;color:var(--navy);}
-  .subtitle{font-size:14px;color:var(--subtext);max-width:640px;margin-top:6px;}
+    firebase.initializeApp(firebaseConfig);
+    window.db = firebase.firestore();
+  </script>
 
-  .data-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;}
-  .data-toolbar .grow{flex:1;min-width:160px;font-size:12px;color:var(--subtext);}
-  .data-toolbar .grow b{color:var(--navy);}
-  .btn-outline-teal{border-color:var(--teal);color:var(--teal);background:#fff;}
-  .btn-outline-gold{border-color:var(--gold);color:#8A5F16;background:#fff;}
-  input[type=file]{display:none;}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-  .section-tabs{display:flex;gap:8px;margin:20px 0;flex-wrap:wrap;}
-  .section-tab{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;border:1px solid var(--border);background:#fff;color:var(--navy);cursor:pointer;}
-  .section-tab.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+  <style>
+    :root{
+      --navy:#0E3B3C; --navy-deep:#092726; --teal:#1C6B6E; --teal-soft:#DCEBE9;
+      --gold:#C08A2E; --gold-soft:#F2E2C1; --bg:#F4F6F5; --card:#FFFFFF;
+      --border:#DFE5E3; --text:#16211F; --subtext:#5E6E6A; --danger:#A8442D;
+      --danger-soft:#F3E0DA; --success:#2B7A57;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',ui-sans-serif,system-ui,-apple-system,sans-serif;}
+    h1,h2,h3{font-family:Georgia,'Iowan Old Style','Times New Roman',serif;margin:0;}
+    .app{max-width:1200px;margin:0 auto;padding:24px 16px 60px;}
+    .eyebrow{font-size:12px;font-weight:600;color:var(--teal);letter-spacing:.03em;margin-bottom:4px;}
+    .title{font-size:30px;color:var(--navy);}
+    .subtitle{font-size:14px;color:var(--subtext);max-width:640px;margin-top:6px;}
 
-  .view-toggle{display:inline-flex;gap:4px;padding:4px;border-radius:8px;background:var(--teal-soft);}
-  .view-toggle button{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;border:none;background:transparent;color:var(--navy);cursor:pointer;}
-  .view-toggle button.active{background:var(--navy);color:#fff;}
+    .view-toggle{display:inline-flex;gap:4px;padding:4px;border-radius:8px;background:var(--teal-soft);}
+    .view-toggle button{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;border:none;background:transparent;color:var(--navy);cursor:pointer;}
+    .view-toggle button.active{background:var(--navy);color:#fff;}
 
-  .toolbar-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
-  .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--navy);}
-  .btn-primary{background:var(--navy);color:#fff;border-color:var(--navy);}
-  .btn-danger{background:var(--danger);color:#fff;border-color:var(--danger);}
-  .btn-ghost{background:transparent;border:none;padding:2px;cursor:pointer;}
+    .toolbar-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--navy);}
+    .btn-primary{background:var(--navy);color:#fff;border-color:var(--navy);}
+    .btn-danger{background:var(--danger);color:#fff;border-color:var(--danger);}
+    .btn-ghost{background:transparent;border:none;padding:2px;cursor:pointer;}
 
-  .stat-cards{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
-  .stat-card{flex:1;min-width:150px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
-  .stat-label{font-size:12px;font-weight:600;color:var(--subtext);}
-  .stat-value{font-family:Georgia,serif;font-size:28px;color:var(--navy);margin-top:2px;}
+    .stat-cards{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
+    .stat-card{flex:1;min-width:150px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+    .stat-label{font-size:12px;font-weight:600;color:var(--subtext);}
+    .stat-value{font-family:Georgia,serif;font-size:28px;color:var(--navy);margin-top:2px;}
 
-  .panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;}
-  .panel-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:10px;}
-  .charts-grid{display:grid;grid-template-columns:1fr;gap:14px;}
-  @media(min-width:900px){.charts-grid{grid-template-columns:1fr 1fr;}}
-  .charts-grid .span-2{grid-column:1/-1;}
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;}
+    .panel-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:10px;}
+    .charts-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+    @media(min-width:900px){.charts-grid{grid-template-columns:1fr 1fr;}}
+    .charts-grid .span-2{grid-column:1/-1;}
 
-  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
-  .bar-label{width:140px;flex:0 0 auto;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .bar-track{flex:1;background:var(--bg);border-radius:5px;height:14px;overflow:hidden;}
-  .bar-fill{height:100%;border-radius:5px;}
-  .bar-count{width:26px;flex:0 0 auto;font-size:12px;font-weight:700;color:var(--navy);text-align:right;}
+    .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+    .bar-label{width:140px;flex:0 0 auto;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .bar-track{flex:1;background:var(--bg);border-radius:5px;height:14px;overflow:hidden;}
+    .bar-fill{height:100%;border-radius:5px;}
+    .bar-count{width:26px;flex:0 0 auto;font-size:12px;font-weight:700;color:var(--navy);text-align:right;}
 
-  .donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
-  .donut{width:150px;height:150px;border-radius:50%;position:relative;flex:0 0 auto;}
-  .donut-hole{position:absolute;inset:24px;background:var(--card);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;}
-  .donut-hole b{font-family:Georgia,serif;font-size:20px;color:var(--navy);}
-  .donut-hole span{font-size:10px;color:var(--subtext);}
-  .legend-item{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;}
-  .legend-dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto;}
+    .donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
+    .donut{width:150px;height:150px;border-radius:50%;position:relative;flex:0 0 auto;}
+    .donut-hole{position:absolute;inset:24px;background:var(--card);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;}
+    .donut-hole b{font-family:Georgia,serif;font-size:20px;color:var(--navy);}
+    .donut-hole span{font-size:10px;color:var(--subtext);}
+    .legend-item{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;}
+    .legend-dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto;}
 
-  .filter-bar{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;}
-  .filter-field{min-width:150px;}
-  .filter-field-label{font-size:11px;font-weight:700;color:var(--subtext);margin-bottom:4px;}
-  .search-wrap{position:relative;}
-  .search-wrap .search-icon{position:absolute;left:8px;top:9px;font-size:12px;color:var(--subtext);}
-  .search-wrap input{padding-left:24px;}
-  .clear-btn{font-size:12px;font-weight:700;color:var(--teal);background:none;border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;height:36px;}
+    .filter-bar{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;}
+    .filter-field{min-width:150px;}
+    .filter-field-label{font-size:11px;font-weight:700;color:var(--subtext);margin-bottom:4px;}
+    .search-wrap{position:relative;}
+    .search-wrap .search-icon{position:absolute;left:8px;top:9px;font-size:12px;color:var(--subtext);}
+    .search-wrap input{padding-left:24px;}
+    .clear-btn{font-size:12px;font-weight:700;color:var(--teal);background:none;border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;height:36px;}
 
-  table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px;}
-  thead tr{background:var(--navy);color:#fff;}
-  th{text-align:left;padding:10px 12px;font-size:12px;font-weight:700;}
-  td{padding:10px 12px;border-top:1px solid var(--border);vertical-align:top;}
-  tr.odd{background:var(--bg);}
-  .table-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;}
-  .cell-sub{font-size:11px;color:var(--subtext);margin-top:2px;}
-  .empty-row{text-align:center;padding:32px;color:var(--subtext);font-size:13px;}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px;}
+    thead tr{background:var(--navy);color:#fff;}
+    th{text-align:left;padding:10px 12px;font-size:12px;font-weight:700;}
+    td{padding:10px 12px;border-top:1px solid var(--border);vertical-align:top;}
+    tr.odd{background:var(--bg);}
+    .table-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;}
+    .cell-sub{font-size:11px;color:var(--subtext);margin-top:2px;}
+    .empty-row{text-align:center;padding:32px;color:var(--subtext);font-size:13px;}
 
-  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;}
-  .pill-teal{background:var(--teal-soft);color:var(--teal);}
-  .pill-gold{background:var(--gold-soft);color:#8A5F16;}
-  .pill-danger{background:var(--danger-soft);color:var(--danger);}
-  .pill-grey{background:#EDEFEE;color:var(--subtext);}
+    .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;}
+    .pill-teal{background:var(--teal-soft);color:var(--teal);}
+    .pill-gold{background:var(--gold-soft);color:#8A5F16;}
+    .pill-danger{background:var(--danger-soft);color:var(--danger);}
 
-  input[type=text], input[type=date], input[type=email], input, select{
-    width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;color:var(--text);background:#fff;outline:none;font-family:inherit;
-  }
-  input:focus, select:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft);}
-  select:disabled{background:#F1F3F2;color:var(--subtext);}
+    input[type=text], input[type=date], input[type=email], select{
+      width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;color:var(--text);background:#fff;outline:none;font-family:inherit;
+    }
+    input:focus, select:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft);}
 
-  .field{display:block;margin-bottom:12px;}
-  .field-label{display:block;font-size:12px;font-weight:700;color:var(--subtext);margin-bottom:4px;}
-  .field-label .req{color:var(--danger);}
-  .form-grid{display:grid;grid-template-columns:1fr;gap:0 16px;}
-  @media(min-width:760px){.form-grid{grid-template-columns:1fr 1fr;}}
-  .form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;padding-top:12px;border-top:1px solid var(--border);}
+    .field{display:block;margin-bottom:12px;}
+    .field-label{display:block;font-size:12px;font-weight:700;color:var(--subtext);margin-bottom:4px;}
+    .field-label .req{color:var(--danger);}
+    .form-grid{display:grid;grid-template-columns:1fr;gap:0 16px;}
+    @media(min-width:760px){.form-grid{grid-template-columns:1fr 1fr;}}
+    .form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;padding-top:12px;border-top:1px solid var(--border);}
 
-  .modal-overlay{position:fixed;inset:0;background:rgba(14,59,60,.45);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px;overflow-y:auto;}
-  .modal{background:var(--card);border-radius:14px;width:100%;max-width:720px;margin-top:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);}
-  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
-  .modal-body{padding:18px 20px;}
-  .confirm-box{background:var(--card);border-radius:14px;padding:20px;max-width:380px;width:100%;}
-  .confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+    .modal-overlay{position:fixed;inset:0;background:rgba(14,59,60,.45);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px;overflow-y:auto;}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:720px;margin-top:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+    .modal-body{padding:18px 20px;}
+    .confirm-box{background:var(--card);border-radius:14px;padding:20px;max-width:380px;width:100%;}
+    .confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
 
-  .icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;}
-</style>
+    .icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;}
+  </style>
 </head>
 <body>
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo, useRef } = React;
+const { useState, useEffect, useMemo } = React;
 
-/* ---------- backup / export helpers ---------- */
-function pad(n){ return String(n).padStart(2,"0"); }
-function timestamp(){
-  const d = new Date();
-  return d.getFullYear()+""+pad(d.getMonth()+1)+pad(d.getDate())+"-"+pad(d.getHours())+pad(d.getMinutes());
-}
-function triggerDownload(blob, filename){
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/* ---------- constants ---------- */
 const PRIMARY_TYPES = [
   "Hotel","Resort","Apartment Hotel","Mabuhay Accommodation","Homestay",
   "Travel and Tour Agency","Travel Agency","Tour Operator","Online Travel Agency",
@@ -169,86 +144,9 @@ const CLASSIFICATIONS = ["Primary Enterprises","Secondary Enterprises"];
 const MUNICIPALITIES = ["Abra de Ilog","Calintaan","Looc","Lubang","Magsaysay","Mamburao","Paluan","Rizal","Sablayan","San Jose","Sta. Cruz"];
 const ACCRED_STATUSES = ["Accredited","Not Accredited"];
 const ESTAB_STATUSES = ["Active","Not Active","Others"];
-const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
-
-const ATTRACTION_CATEGORIES = {
-  "Nature":[
-    {code:"101",label:"Mountains/hills/highlands"},
-    {code:"102",label:"Falls"},
-    {code:"103",label:"Lakes and Pond"},
-    {code:"104",label:"River and Landscape (includes subterranean rivers)"},
-    {code:"105",label:"Coastal Landscape and Seascape (e.g. dive sites, reefs)"},
-    {code:"106",label:"Marine Park (e.g. aquarium, open parks)"},
-    {code:"107",label:"Caves (inland)"},
-    {code:"108",label:"Unique Natural Landscape / Seascape"},
-    {code:"109",label:"Volcanoes"},
-    {code:"199",label:"Other Natural Attractions (e.g. century old trees/forest, endemic species)"},
-  ],
-  "History and Culture":[
-    {code:"201",label:"Fort"},
-    {code:"202",label:"Church, Mosque or Temples"},
-    {code:"203",label:"Historical Road/Trails"},
-    {code:"204",label:"Historic Monuments"},
-    {code:"205",label:"Museum"},
-    {code:"206",label:"Structures and Buildings"},
-    {code:"207",label:"Unique Cultural Heritage"},
-    {code:"208",label:"Archaeological/Historic Sites"},
-    {code:"299",label:"Other Historical or cultural attractions"},
-  ],
-  "Industrial Tourism":[
-    {code:"301",label:"Agro-Forestry"},
-    {code:"302",label:"Farm and Ranch"},
-    {code:"303",label:"Fishery"},
-    {code:"304",label:"Arts and Craft"},
-    {code:"305",label:"Industrial Facilities for Visitors"},
-  ],
-  "Sports and Recreational Facilities":[
-    {code:"401",label:"Golf"},
-    {code:"402",label:"Tennis"},
-    {code:"403",label:"Cycling Road and Area"},
-    {code:"404",label:"Zoo and Botanical Garden"},
-    {code:"405",label:"Sports Complex"},
-    {code:"406",label:"Camping Ground"},
-    {code:"407",label:"Nature Trail and Path"},
-    {code:"408",label:"Beach for Sea Bathing"},
-    {code:"409",label:"Pools and Springs"},
-    {code:"410",label:"Marina and Harbor"},
-    {code:"411",label:"Parks"},
-    {code:"412",label:"Leisure-land, Theme Park"},
-    {code:"413",label:"Resort Complex"},
-    {code:"414",label:"Other Sports and Recreational Activities"},
-    {code:"415",label:"Casino"},
-    {code:"416",label:"Water Sports (Excludes Diving, see Nature Category)"},
-  ],
-  "Shopping":[
-    {code:"501",label:"Malls, Department Stores"},
-    {code:"502",label:"Open Air Market, Traditional Market Area"},
-    {code:"503",label:"Souvenirs And Delicacies"},
-  ],
-  "Customs and Tradition":[
-    {code:"601",label:"Local Specialty Restaurant"},
-    {code:"602",label:"Festivals"},
-    {code:"603",label:"Performing Arts (e.g. Folk Music and Dance)"},
-    {code:"604",label:"Local Culture and Traditions (includes social practices and rituals)"},
-  ],
-  "Special Event":[
-    {code:"701",label:"Exposition"},
-    {code:"702",label:"Convention"},
-    {code:"703",label:"Sports Event"},
-    {code:"799",label:"Other Events"},
-  ],
-  "Health and Wellness":[
-    {code:"801",label:"Hot Spring"},
-    {code:"802",label:"Cold Spring"},
-    {code:"803",label:"Spa"},
-    {code:"804",label:"Hospital/Clinics/Medical Tourism Facilities"},
-  ],
-  "Others":[{code:"901",label:"Others (Please specify)"}],
-};
 
 const PIE_COLORS = ["#1C6B6E","#C08A2E","#0E3B3C","#2B7A57","#A8442D","#8A9B97"];
 
-/* ---------- small icons (inline SVG) ---------- */
 const Icon = ({d, size=16, color="currentColor"}) => (
   <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d={d} />
@@ -260,10 +158,8 @@ const ICONS = {
   trash: "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6",
   x: "M18 6 6 18M6 6l12 12",
   search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3",
-  pin: "M12 21s7-6.4 7-11.5A7 7 0 0 0 5 9.5C5 14.6 12 21 12 21ZM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
 };
 
-/* ---------- reusable UI ---------- */
 function Field({label, required, children}){
   return (<label className="field">
     <span className="field-label">{label}{required && <span className="req"> *</span>}</span>
@@ -302,7 +198,6 @@ function ConfirmDialog({text, onCancel, onConfirm}){
   </div>);
 }
 
-/* simple bar list chart */
 function BarList({data, color}){
   const max = Math.max(1, ...data.map(d=>d.count));
   return (<div>
@@ -317,7 +212,6 @@ function BarList({data, color}){
   </div>);
 }
 
-/* simple donut chart via conic-gradient */
 function Donut({data, total}){
   let acc = 0;
   const stops = data.map((d,i)=>{
@@ -340,26 +234,11 @@ function Donut({data, total}){
   </div>);
 }
 
-/* ---------- establishment form ---------- */
 const emptyEstablishment = {
-  name: "",
-  proprietor: "",
-  email: "",
-  municipality: "",
-  classification: "",
-  type: "",
-  address: "",
-  contact: "",
-  rooms: "",
-  maleEmployees: "",
-  femaleEmployees: "",
-  remarks: "",
-  accredStatus: "Not Accredited",
-  accredNumber: "",
-  accredValidity: "",
-  status: "Active",
-  statusOthers: "",
-  year: ""
+  name: "", proprietor: "", email: "", municipality: "", classification: "",
+  type: "", address: "", contact: "", rooms: "", maleEmployees: "",
+  femaleEmployees: "", remarks: "", accredStatus: "Not Accredited",
+  accredNumber: "", accredValidity: "", status: "Active", statusOthers: "", year: ""
 };
 
 function EstablishmentForm({initial, onCancel, onSave}){
@@ -441,65 +320,6 @@ function EstablishmentForm({initial, onCancel, onSave}){
   </div>);
 }
 
-/* ---------- attraction form ---------- */
-const emptyAttraction = {municipality:"",yearEstablished:"",name:"",selection:"Existing",category:"",code:"",latitude:"",longitude:""};
-
-function AttractionForm({initial, onCancel, onSave}){
-  const [f, setF] = useState(initial || emptyAttraction);
-  const set = (k) => (e) => {
-    const v = e && e.target ? e.target.value : e;
-    setF(prev=>{
-      const next = {...prev, [k]: v};
-      if(k==="category") next.code = "";
-      return next;
-    });
-  };
-  const codeOptions = f.category ? ATTRACTION_CATEGORIES[f.category] : [];
-  const submit = () => {
-    if(!f.municipality || !f.name || !f.category || !f.code){
-      alert("Please complete municipality, name, category, and code.");
-      return;
-    }
-    onSave(f);
-  };
-  return (<div>
-    <div className="form-grid">
-      <Field label="Name of Attraction" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Apo Reef Natural Park" /></Field>
-      <Field label="Municipality" required>
-        <select value={f.municipality} onChange={set("municipality")}>
-          <option value="">Select municipality</option>
-          {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
-        </select>
-      </Field>
-      <Field label="Year Established"><input type="text" value={f.yearEstablished} onChange={set("yearEstablished")} placeholder="e.g. 1930" /></Field>
-      <Field label="Status">
-        <select value={f.selection} onChange={set("selection")}>
-          {ATTRACTION_SELECTIONS.map(s=><option key={s} value={s}>{s}</option>)}
-        </select>
-      </Field>
-      <Field label="Attraction Category" required>
-        <select value={f.category} onChange={set("category")}>
-          <option value="">Select category</option>
-          {Object.keys(ATTRACTION_CATEGORIES).map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-      </Field>
-      <Field label="Attraction Code" required>
-        <select value={f.code} onChange={set("code")} disabled={!f.category}>
-          <option value="">{f.category ? "Select code" : "Select category first"}</option>
-          {codeOptions.map(o=><option key={o.code} value={o.code}>{o.code} — {o.label}</option>)}
-        </select>
-      </Field>
-      <Field label="Latitude"><input type="text" value={f.latitude} onChange={set("latitude")} placeholder="e.g. 13.0667" /></Field>
-      <Field label="Longitude"><input type="text" value={f.longitude} onChange={set("longitude")} placeholder="e.g. 120.4833" /></Field>
-    </div>
-    <div className="form-actions">
-      <button className="btn" onClick={onCancel}>Cancel</button>
-      <button className="btn btn-primary" onClick={submit}>Save Attraction</button>
-    </div>
-  </div>);
-}
-
-/* ---------- filter bar ---------- */
 function FilterBar({filters, setFilters, options, fields}){
   const update = (k,v) => setFilters(prev=>({...prev, [k]: v}));
   return (<div className="filter-bar">
@@ -523,19 +343,30 @@ function FilterBar({filters, setFilters, options, fields}){
   </div>);
 }
 
-/* ---------- establishments section ---------- */
-function EstablishmentsSection({data, setData}){
+function MainApp(){
+  const [data, setData] = useState([]);
   const [view, setView] = useState("dashboard");
   const [filters, setFilters] = useState({});
   const [modal, setModal] = useState(null);
   const [toDelete, setToDelete] = useState(null);
 
+  // Realtime Firestore Listener
+  useEffect(() => {
+    const unsubscribe = window.db.collection("establishments").onSnapshot((snapshot) => {
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setData(docs);
+    }, (error) => {
+      console.error("Firestore sync error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const options = useMemo(()=>({
-    municipality:MUNICIPALITIES,
-    type:[...new Set(data.map(d=>d.type))].sort(),
-    accredStatus:ACCRED_STATUSES,
-    classification:CLASSIFICATIONS,
-    year:[...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
+    municipality: MUNICIPALITIES,
+    type: [...new Set(data.map(d=>d.type))].filter(Boolean).sort(),
+    accredStatus: ACCRED_STATUSES,
+    classification: CLASSIFICATIONS,
+    year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
   }), [data]);
 
   const filtered = useMemo(()=>data.filter(d=>{
@@ -552,335 +383,130 @@ function EstablishmentsSection({data, setData}){
     const m = {}; data.forEach(d=>{ m[d.municipality]=(m[d.municipality]||0)+1; });
     return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
   }, [data]);
+  
   const byClassification = useMemo(()=>{
     const m = {}; data.forEach(d=>{ m[d.classification]=(m[d.classification]||0)+1; });
     return Object.entries(m).map(([name,value])=>({name,value}));
   }, [data]);
+
   const byType = useMemo(()=>{
     const m = {}; data.forEach(d=>{ m[d.type]=(m[d.type]||0)+1; });
     return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
   }, [data]);
 
-  const save = (f) => {
-    if(modal.mode==="edit"){
-      setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
-    } else {
-      setData(prev=>[...prev, {...f, id:"E-"+Date.now()}]);
-    }
-    setModal(null);
-  };
-
-  return (<div>
-    <div className="toolbar-row">
-      <div className="view-toggle">
-        <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
-        <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
-      </div>
-      <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Establishment</button>
-    </div>
-
-    {view==="dashboard" ? (
-      <div>
-        <div className="stat-cards">
-          <StatCard label="Total Establishments" value={data.length} />
-          <StatCard label="Accredited" value={data.filter(d=>d.accredStatus==="Accredited").length} />
-          <StatCard label="Not Accredited" value={data.filter(d=>d.accredStatus==="Not Accredited").length} />
-          <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
-        </div>
-        <div className="charts-grid">
-          <div className="panel">
-            <div className="panel-title">Per Municipality</div>
-            <BarList data={byMunicipality} color="#1C6B6E" />
-          </div>
-          <div className="panel">
-            <div className="panel-title">Per Classification</div>
-            <Donut data={byClassification} total={data.length} />
-          </div>
-          <div className="panel span-2">
-            <div className="panel-title">Per Type</div>
-            <BarList data={byType} color="#C08A2E" />
-          </div>
-        </div>
-      </div>
-    ) : (
-      <div>
-        <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
-          {key:"name", label:"Establishment", type:"search", placeholder:"Search by name"},
-          {key:"municipality", label:"Municipality"},
-          {key:"classification", label:"Classification"},
-          {key:"type", label:"Type"},
-          {key:"accredStatus", label:"Accreditation"},
-          {key:"year", label:"Year"},
-        ]} />
-        <div className="table-wrap">
-          <table>
-            <thead><tr>{["Establishment","Municipality","Rooms","Male","Female","Remarks","Type","Status",""].map(h=><th key={h}>{h}</th>)}</tr></thead>
-            <tbody>
-              {filtered.map((d,i)=>(
-                <tr key={d.id} className={i%2?"odd":""}>
-                  <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
-                  <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td><td>{d.remarks}</td><td>{d.type}</td><td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
-                  <td>
-                    <div style={{display:"flex",gap:10}}>
-                      <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
-                      <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No establishments match these filters.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )}
-
-    {modal && (
-      <Modal title={modal.mode==="edit" ? "Edit Establishment" : "Add Establishment"} onClose={()=>setModal(null)}>
-        <EstablishmentForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
-      </Modal>
-    )}
-    {toDelete && (
-      <ConfirmDialog text={'Delete "'+toDelete.name+'"? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={()=>{ setData(prev=>prev.filter(d=>d.id!==toDelete.id)); setToDelete(null); }} />
-    )}
-  </div>);
-}
-
-/* ---------- attractions section ---------- */
-function AttractionsSection({data, setData}){
-  const [filters, setFilters] = useState({});
-  const [modal, setModal] = useState(null);
-  const [toDelete, setToDelete] = useState(null);
-
-  const options = useMemo(()=>({
-    municipality:MUNICIPALITIES,
-    selection:ATTRACTION_SELECTIONS,
-    category:Object.keys(ATTRACTION_CATEGORIES),
-    year:[...new Set(data.map(d=>d.yearEstablished).filter(Boolean))].sort().reverse(),
-  }), [data]);
-
-  const filtered = useMemo(()=>data.filter(d=>{
-    if(filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
-    if(filters.municipality && d.municipality!==filters.municipality) return false;
-    if(filters.selection && d.selection!==filters.selection) return false;
-    if(filters.category && d.category!==filters.category) return false;
-    if(filters.year && d.yearEstablished!==filters.year) return false;
-    return true;
-  }), [data, filters]);
-
-  const save = (f) => {
-    if(modal.mode==="edit"){
-      setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
-    } else {
-      setData(prev=>[...prev, {...f, id:"A-"+Date.now()}]);
-    }
-    setModal(null);
-  };
-
-  return (<div>
-    <div className="toolbar-row">
-      <div className="stat-cards" style={{marginBottom:0}}>
-        <StatCard label="Total Attractions" value={data.length} />
-        <StatCard label="Existing" value={data.filter(d=>d.selection==="Existing").length} />
-        <StatCard label="Potential" value={data.filter(d=>d.selection==="Potential").length} />
-        <StatCard label="Emerging" value={data.filter(d=>d.selection==="Emerging").length} />
-      </div>
-      <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Attraction</button>
-    </div>
-
-    <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
-      {key:"name", label:"Attraction", type:"search", placeholder:"Search by name"},
-      {key:"municipality", label:"Municipality"},
-      {key:"selection", label:"Status"},
-      {key:"category", label:"Category"},
-      {key:"year", label:"Year Established"},
-    ]} />
-
-    <div className="table-wrap">
-      <table>
-        <thead><tr>{["Attraction","Municipality","Year","Status","Code","Coordinates",""].map(h=><th key={h}>{h}</th>)}</tr></thead>
-        <tbody>
-          {filtered.map((d,i)=>{
-            const codeInfo = (ATTRACTION_CATEGORIES[d.category]||[]).find(o=>o.code===d.code);
-            return (
-              <tr key={d.id} className={i%2?"odd":""}>
-                <td style={{fontWeight:600}}>{d.name}</td>
-                <td>{d.municipality}</td>
-                <td>{d.yearEstablished}</td>
-                <td><Pill tone={d.selection==="Existing"?"teal":d.selection==="Potential"?"gold":"grey"}>{d.selection}</Pill></td>
-                <td>
-                  <div style={{fontSize:12,fontWeight:700,color:"var(--navy)"}}>{d.category}</div>
-                  <div className="cell-sub">{d.code} — {codeInfo ? codeInfo.label : ""}</div>
-                </td>
-                <td className="cell-sub">{d.latitude && d.longitude ? (<span style={{display:"flex",alignItems:"center",gap:4}}><Icon d={ICONS.pin} size={12} color="#5E6E6A" />{d.latitude}, {d.longitude}</span>) : "—"}</td>
-                <td>
-                  <div style={{display:"flex",gap:10}}>
-                    <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
-                    <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-          {filtered.length===0 && <tr><td colSpan="7" className="empty-row">No attractions match these filters.</td></tr>}
-        </tbody>
-      </table>
-    </div>
-
-    {modal && (
-      <Modal title={modal.mode==="edit" ? "Edit Attraction" : "Add Attraction"} onClose={()=>setModal(null)}>
-        <AttractionForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
-      </Modal>
-    )}
-    {toDelete && (
-      <ConfirmDialog text={'Delete "'+toDelete.name+'"? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={()=>{ setData(prev=>prev.filter(d=>d.id!==toDelete.id)); setToDelete(null); }} />
-    )}
-  </div>);
-}
-
-/* ---------- app shell ---------- */
-function App(){
-  const [section, setSection] = useState("establishments");
-  const [establishments, setEstablishments] = useState(() => {
+  // Firestore Write Operations
+  const save = async (f) => {
     try {
-      const local = localStorage.getItem("tourism_establishments");
-      return local ? JSON.parse(local) : [];
-    } catch(e) { return []; }
-  });
-  const [attractions, setAttractions] = useState(() => {
-    try {
-      const local = localStorage.getItem("tourism_attractions");
-      return local ? JSON.parse(local) : [];
-    } catch(e) { return []; }
-  });
-  
-  const [savedAt, setSavedAt] = useState(() => {
-    const ts = localStorage.getItem("tourism_last_saved");
-    return ts ? new Date(ts) : null;
-  });
-
-  const restoreInputRef = useRef(null);
-
-  // Auto-save data locally whenever establishments or attractions change
-  useEffect(() => {
-    try {
-      localStorage.setItem("tourism_establishments", JSON.stringify(establishments));
-      localStorage.setItem("tourism_attractions", JSON.stringify(attractions));
-      const now = new Date();
-      localStorage.setItem("tourism_last_saved", now.toISOString());
-      setSavedAt(now);
-    } catch(e) { console.error("LocalStorage write failed:", e); }
-  }, [establishments, attractions]);
-
-  const buildPayload = () => ({
-    type: "tourism-inventory-backup",
-    version: 1,
-    savedAt: new Date().toISOString(),
-    establishments,
-    attractions,
-  });
-
-  const downloadBackup = () => {
-    const blob = new Blob([JSON.stringify(buildPayload(), null, 2)], {type:"application/json"});
-    triggerDownload(blob, "tourism-inventory-backup-"+timestamp()+".json");
-  };
-
-  const handleRestoreFile = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result);
-        if (!parsed || !Array.isArray(parsed.establishments) || !Array.isArray(parsed.attractions)) {
-          alert("This file doesn't look like a valid inventory backup.");
-          return;
-        }
-        if (!window.confirm("Restoring this backup will replace all current establishments and attractions. Continue?")) return;
-        setEstablishments(parsed.establishments);
-        setAttractions(parsed.attractions);
-        alert("Backup restored successfully.");
-      } catch (err) {
-        alert("Couldn't read that file — make sure it's a backup exported from this tool.");
+      if(modal.mode === "edit"){
+        const { id, ...payload } = f;
+        await window.db.collection("establishments").doc(id).update(payload);
+      } else {
+        await window.db.collection("establishments").add(f);
       }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+      setModal(null);
+    } catch (err) {
+      alert("Error saving record: " + err.message);
+    }
   };
 
-  const exportExcel = () => {
-    const wb = XLSX.utils.book_new();
-    const estRows = establishments.map(d => ({
-      "Municipality": d.municipality,
-      "Name of Establishment": d.name,
-      "Proprietor / Owner": d.proprietor || "",
-      "Classification": d.classification,
-      "Type": d.type,
-      "Address": d.address,
-      "Contact Number": d.contact,
-      "Email Address": d.email || "",
-      "Number of Rooms": d.rooms,
-      "Male Employees": d.maleEmployees,
-      "Female Employees": d.femaleEmployees,
-      "Remarks": d.remarks,
-      "Accreditation Status": d.accredStatus,
-      "Accreditation Number": d.accredNumber,
-      "Accreditation Validity": d.accredValidity,
-      "Status of Establishment": d.status === "Others" && d.statusOthers ? d.statusOthers : d.status,
-      "Year": d.year,
-    }));
-    const ws1 = XLSX.utils.json_to_sheet(estRows);
-    XLSX.utils.book_append_sheet(wb, ws1, "Establishments");
-
-    const attrRows = attractions.map(d => {
-      const info = (ATTRACTION_CATEGORIES[d.category] || []).find(o => o.code === d.code);
-      return {
-        "Municipality": d.municipality,
-        "Year Established": d.yearEstablished,
-        "Name of Attraction": d.name,
-        "Status": d.selection,
-        "Category": d.category,
-        "Code": d.code,
-        "Code Description": info ? info.label : "",
-        "Latitude": d.latitude,
-        "Longitude": d.longitude,
-      };
-    });
-    const ws2 = XLSX.utils.json_to_sheet(attrRows);
-    XLSX.utils.book_append_sheet(wb, ws2, "Attractions");
-
-    XLSX.writeFile(wb, "tourism-inventory-" + timestamp() + ".xlsx");
+  const removeDoc = async (id) => {
+    try {
+      await window.db.collection("establishments").doc(id).delete();
+      setToDelete(null);
+    } catch (err) {
+      alert("Error deleting record: " + err.message);
+    }
   };
 
-  return (<div className="app">
-    <div className="eyebrow">Tourism Office · Local Inventory System</div>
-    <h1 className="title">Establishment &amp; Attraction Inventory</h1>
-    <p className="subtitle">Record tourism-related establishments and attractions, keep accreditation status current, and monitor coverage across municipalities.</p>
+  return (
+    <div className="app">
+      <div className="eyebrow">Provincial Tourism Office</div>
+      <h1 className="title">Establishment &amp; Attraction Inventory</h1>
+      <p className="subtitle">Real-time database system for tourism establishments.</p>
 
-    <div className="data-toolbar">
-      <button className="btn btn-primary" onClick={downloadBackup}>Download Backup (.json)</button>
-      <button className="btn btn-outline-teal" onClick={()=>restoreInputRef.current && restoreInputRef.current.click()}>Restore Backup</button>
-      <input ref={restoreInputRef} type="file" accept=".json,application/json" onChange={handleRestoreFile} />
-      <button className="btn btn-outline-gold" onClick={exportExcel}>Download as Excel (.xlsx)</button>
-      
-      <div className="grow">{savedAt ? (<span>Auto-saved locally: <b>{savedAt.toLocaleTimeString()}</b></span>) : "No entries yet"}</div>
+      <div className="toolbar-row" style={{marginTop: 20}}>
+        <div className="view-toggle">
+          <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
+          <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
+        </div>
+        <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Establishment</button>
+      </div>
+
+      {view==="dashboard" ? (
+        <div>
+          <div className="stat-cards">
+            <StatCard label="Total Establishments" value={data.length} />
+            <StatCard label="Accredited" value={data.filter(d=>d.accredStatus==="Accredited").length} />
+            <StatCard label="Not Accredited" value={data.filter(d=>d.accredStatus==="Not Accredited").length} />
+            <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
+          </div>
+          <div className="charts-grid">
+            <div className="panel">
+              <div className="panel-title">Per Municipality</div>
+              <BarList data={byMunicipality} color="#1C6B6E" />
+            </div>
+            <div className="panel">
+              <div className="panel-title">Per Classification</div>
+              <Donut data={byClassification} total={data.length} />
+            </div>
+            <div className="panel span-2">
+              <div className="panel-title">Per Type</div>
+              <BarList data={byType} color="#C08A2E" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
+            {key:"name", label:"Establishment", type:"search", placeholder:"Search by name"},
+            {key:"municipality", label:"Municipality"},
+            {key:"classification", label:"Classification"},
+            {key:"type", label:"Type"},
+            {key:"accredStatus", label:"Accreditation"},
+            {key:"year", label:"Year"},
+          ]} />
+          <div className="table-wrap">
+            <table>
+              <thead><tr>{["Establishment","Municipality","Rooms","Male","Female","Remarks","Type","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+              <tbody>
+                {filtered.map((d,i)=>(
+                  <tr key={d.id} className={i%2?"odd":""}>
+                    <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
+                    <td>{d.municipality}</td>
+                    <td>{d.rooms}</td>
+                    <td>{d.maleEmployees}</td>
+                    <td>{d.femaleEmployees}</td>
+                    <td>{d.remarks}</td>
+                    <td>{d.type}</td>
+                    <td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
+                    <td>
+                      <div style={{display:"flex",gap:10}}>
+                        <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
+                        <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No records found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {modal && (
+        <Modal title={modal.mode==="edit" ? "Edit Establishment" : "Add Establishment"} onClose={()=>setModal(null)}>
+          <EstablishmentForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
+        </Modal>
+      )}
+      {toDelete && (
+        <ConfirmDialog text={'Delete "'+toDelete.name+'"? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={()=>removeDoc(toDelete.id)} />
+      )}
     </div>
-    <p style={{fontSize:12,color:"var(--subtext)",marginTop:8}}>
-      Data auto-saves locally in your browser. Download a <b>JSON Backup</b> to transfer or keep off-site copies.
-    </p>
-
-    <div className="section-tabs">
-      <button className={"section-tab"+(section==="establishments"?" active":"")} onClick={()=>setSection("establishments")}>Section 1 · Establishments</button>
-      <button className={"section-tab"+(section==="attractions"?" active":"")} onClick={()=>setSection("attractions")}>Section 2 · Attractions</button>
-    </div>
-
-    {section==="establishments"
-      ? <EstablishmentsSection data={establishments} setData={setEstablishments} />
-      : <AttractionsSection data={attractions} setData={setAttractions} />}
-  </div>);
+  );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(<MainApp />);
 </script>
 </body>
 </html>
