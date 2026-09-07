@@ -254,6 +254,149 @@
 
     const PIE_COLORS = ["#1C6B6E","#C08A2E","#0E3B3C","#2B7A57","#A8442D","#8A9B97"];
 
+    /* ---------- attraction code lookup (code -> category + label) ---------- */
+    const ATTRACTION_CODE_INDEX = {};
+    Object.entries(ATTRACTION_CATEGORIES).forEach(([cat, items]) => {
+      items.forEach(it => { ATTRACTION_CODE_INDEX[it.code] = { category: cat, label: it.label }; });
+    });
+
+    /* ---------- excel backup / submission format ---------- */
+    const ESTAB_HEADERS = [
+      "No.","Name of Establishment","Proprietor / Owner","Municipality","Classification","Type",
+      "Address","Contact Number","Email Address","Number of Rooms","Male Employees","Female Employees",
+      "Remarks","Year Established / Registered","Status of Accreditation","Accreditation Number",
+      "Accreditation Validity","Status of Establishment",
+    ];
+    const ATTR_HEADERS = [
+      "No.","Municipality","Name of Attraction","Year Established","Status","Attraction Category",
+      "Attraction Code","Code Description","Latitude","Longitude",
+    ];
+
+    function buildEstabRows(list){
+      return list.map((d,i)=>[
+        i+1, d.name||"", d.proprietor||"", d.municipality||"", d.classification||"", d.type||"",
+        d.address||"", d.contact||"", d.email||"", d.rooms||"", d.maleEmployees||"", d.femaleEmployees||"",
+        d.remarks||"", d.year||"", d.accredStatus||"", d.accredNumber||"", d.accredValidity||"",
+        (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
+      ]);
+    }
+    function buildAttrRows(list){
+      return list.map((d,i)=>[
+        i+1, d.municipality||"", d.name||"", d.yearEstablished||"", d.selection||"", d.category||"", d.code||"",
+        (ATTRACTION_CODE_INDEX[d.code]||{}).label || "", d.latitude||"", d.longitude||"",
+      ]);
+    }
+
+    function exportInventoryWorkbook(establishments, attractions){
+      const wb = XLSX.utils.book_new();
+
+      const infoRows = [
+        ["PROVINCIAL TOURISM OFFICE"],
+        ["Tourism Establishment & Attraction Inventory — Submission File"],
+        ["Generated: " + new Date().toLocaleString()],
+        [""],
+        ["Instructions"],
+        ["1. Do not rename, reorder, or delete the column headers on the 'Establishments' and 'Attractions' sheets."],
+        ["2. To add or correct records offline, edit the rows or add new rows below the existing data on each sheet."],
+        ["3. Save this file, then use the 'Upload Encoded Excel' button in the app to bulk-import the rows."],
+        ["4. This same file, once complete, can be submitted directly to the national agency."],
+      ];
+      const wsInfo = XLSX.utils.aoa_to_sheet(infoRows);
+      wsInfo['!cols'] = [{ wch: 95 }];
+      XLSX.utils.book_append_sheet(wb, wsInfo, "Read Me");
+
+      const wsEstab = XLSX.utils.aoa_to_sheet([ESTAB_HEADERS, ...buildEstabRows(establishments)]);
+      wsEstab['!cols'] = ESTAB_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
+      XLSX.utils.book_append_sheet(wb, wsEstab, "Establishments");
+
+      const wsAttr = XLSX.utils.aoa_to_sheet([ATTR_HEADERS, ...buildAttrRows(attractions)]);
+      wsAttr['!cols'] = ATTR_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
+      XLSX.utils.book_append_sheet(wb, wsAttr, "Attractions");
+
+      XLSX.writeFile(wb, "Tourism-Inventory-Backup-" + timestamp() + ".xlsx");
+    }
+
+    /* ---------- normalization helpers for flexible excel encoding ---------- */
+    function normalizeKey(s){ return String(s||"").trim().toLowerCase(); }
+    function stripListPrefix(s){ return String(s||"").replace(/^\s*\d+[\.\)]\s*/, "").trim(); }
+    function matchFromList(value, list){
+      const cleaned = stripListPrefix(value);
+      if(!cleaned) return "";
+      const found = list.find(item => normalizeKey(item) === normalizeKey(cleaned));
+      return found || cleaned;
+    }
+
+    function sheetToRows(wb, sheetName, canonicalHeaders){
+      const ws = wb.Sheets[sheetName];
+      if(!ws) return [];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", blankrows: false });
+      if(aoa.length < 2) return [];
+      const canonMap = {};
+      (canonicalHeaders||[]).forEach(h => { canonMap[normalizeKey(h)] = h; });
+      const headers = aoa[0].map(h => canonMap[normalizeKey(h)] || String(h||"").trim());
+      return aoa.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((h, idx) => { obj[h] = row[idx] !== undefined ? row[idx] : ""; });
+        return obj;
+      });
+    }
+
+    function parseImportedWorkbook(wb){
+      const estabRows = sheetToRows(wb, "Establishments", ESTAB_HEADERS);
+      const attrRows = sheetToRows(wb, "Attractions", ATTR_HEADERS);
+
+      const establishments = [];
+      let estabSkipped = 0;
+      estabRows.forEach(row => {
+        const name = String(row["Name of Establishment"]||"").trim();
+        const municipality = matchFromList(row["Municipality"], MUNICIPALITIES);
+        const classification = matchFromList(row["Classification"], CLASSIFICATIONS);
+        const typeList = classification==="Primary Enterprises" ? PRIMARY_TYPES
+          : classification==="Secondary Enterprises" ? SECONDARY_TYPES
+          : [...PRIMARY_TYPES, ...SECONDARY_TYPES];
+        const type = matchFromList(row["Type"], typeList);
+        if(!name || !municipality || !classification || !type){ estabSkipped++; return; }
+        const rawStatus = matchFromList(row["Status of Establishment"], ESTAB_STATUSES) || "Active";
+        const status = ESTAB_STATUSES.includes(rawStatus) ? rawStatus : "Others";
+        const rawAccred = matchFromList(row["Status of Accreditation"], ACCRED_STATUSES);
+        establishments.push({
+          name, proprietor: String(row["Proprietor / Owner"]||"").trim(),
+          email: String(row["Email Address"]||"").trim(), municipality, classification, type,
+          address: String(row["Address"]||"").trim(), contact: String(row["Contact Number"]||"").trim(),
+          rooms: String(row["Number of Rooms"]||"").trim(), maleEmployees: String(row["Male Employees"]||"").trim(),
+          femaleEmployees: String(row["Female Employees"]||"").trim(), remarks: String(row["Remarks"]||"").trim(),
+          accredStatus: ACCRED_STATUSES.includes(rawAccred) ? rawAccred : "Not Accredited",
+          accredNumber: String(row["Accreditation Number"]||"").trim(),
+          accredValidity: String(row["Accreditation Validity"]||"").trim(),
+          status, statusOthers: status==="Others" ? stripListPrefix(row["Status of Establishment"]) : "",
+          year: String(row["Year Established / Registered"]||"").trim(),
+        });
+      });
+
+      const attractions = [];
+      let attrSkipped = 0;
+      attrRows.forEach(row => {
+        const name = String(row["Name of Attraction"]||"").trim();
+        const municipality = matchFromList(row["Municipality"], MUNICIPALITIES);
+        let code = stripListPrefix(row["Attraction Code"]);
+        let category = matchFromList(row["Attraction Category"], Object.keys(ATTRACTION_CATEGORIES));
+        if(code && !ATTRACTION_CODE_INDEX[code]) code = "";
+        if(code && !ATTRACTION_CATEGORIES[category]) category = ATTRACTION_CODE_INDEX[code].category;
+        if(!name || !municipality || !category || !code){ attrSkipped++; return; }
+        const rawSelection = matchFromList(row["Status"], ATTRACTION_SELECTIONS);
+        attractions.push({
+          municipality, name,
+          yearEstablished: String(row["Year Established"]||"").trim(),
+          selection: ATTRACTION_SELECTIONS.includes(rawSelection) ? rawSelection : "Existing",
+          category, code,
+          latitude: String(row["Latitude"]||"").trim(),
+          longitude: String(row["Longitude"]||"").trim(),
+        });
+      });
+
+      return { establishments, estabSkipped, attractions, attrSkipped };
+    }
+
     /* ---------- icons (inline SVG) ---------- */
     const Icon = ({d, size=16, color="currentColor"}) => (
       <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -267,6 +410,8 @@
       x: "M18 6 6 18M6 6l12 12",
       search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3",
       pin: "M12 21s7-6.4 7-11.5A7 7 0 0 0 5 9.5C5 14.6 12 21 12 21ZM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+      download: "M12 3v12M7 10l5 5 5-5M4 21h16",
+      upload: "M12 21V9M7 14l5-5 5 5M4 3h16",
     };
 
     /* ---------- reusable UI components ---------- */
@@ -738,6 +883,71 @@
       </div>);
     }
 
+    /* ---------- backup / submission toolbar ---------- */
+    function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions }){
+      const fileRef = useRef(null);
+
+      const handleExport = () => {
+        exportInventoryWorkbook(establishments, attractions);
+      };
+
+      const handleFile = (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const wb = XLSX.read(evt.target.result, { type: "array" });
+            const { establishments: newEstab, estabSkipped, attractions: newAttr, attrSkipped } = parseImportedWorkbook(wb);
+
+            const existingEstabKeys = new Set(establishments.map(d => (d.name+"|"+d.municipality).toLowerCase()));
+            const estabToAdd = [];
+            let estabDup = 0;
+            newEstab.forEach(d => {
+              const key = (d.name+"|"+d.municipality).toLowerCase();
+              if(existingEstabKeys.has(key)){ estabDup++; return; }
+              existingEstabKeys.add(key);
+              estabToAdd.push({ ...d, id: "E-import-"+Date.now()+"-"+Math.random().toString(36).slice(2,7) });
+            });
+
+            const existingAttrKeys = new Set(attractions.map(d => (d.name+"|"+d.municipality).toLowerCase()));
+            const attrToAdd = [];
+            let attrDup = 0;
+            newAttr.forEach(d => {
+              const key = (d.name+"|"+d.municipality).toLowerCase();
+              if(existingAttrKeys.has(key)){ attrDup++; return; }
+              existingAttrKeys.add(key);
+              attrToAdd.push({ ...d, id: "A-import-"+Date.now()+"-"+Math.random().toString(36).slice(2,7) });
+            });
+
+            if(estabToAdd.length) setEstablishments(prev => [...prev, ...estabToAdd]);
+            if(attrToAdd.length) setAttractions(prev => [...prev, ...attrToAdd]);
+
+            alert(
+              "Import complete.\n\n" +
+              "Establishments added: " + estabToAdd.length + "\n" +
+              "Establishments skipped (missing required fields): " + estabSkipped + "\n" +
+              "Establishments skipped (already in inventory): " + estabDup + "\n\n" +
+              "Attractions added: " + attrToAdd.length + "\n" +
+              "Attractions skipped (missing required fields): " + attrSkipped + "\n" +
+              "Attractions skipped (already in inventory): " + attrDup
+            );
+          } catch(err){
+            alert("Could not read this file. Please upload the .xlsx backup file with the original 'Establishments' and 'Attractions' sheets, unedited headers.");
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      return (<div className="data-toolbar">
+        <div className="grow"><b>Backup &amp; Submission:</b> Download the inventory as an Excel file to back up or submit to the national agency — fill it in (here or offline), then upload it back to bulk-add records instead of encoding one by one.</div>
+        <button className="btn btn-outline-teal" onClick={handleExport}><Icon d={ICONS.download} size={14} color="#1C6B6E" /> Download Excel Backup</button>
+        <button className="btn btn-outline-gold" onClick={()=>fileRef.current.click()}><Icon d={ICONS.upload} size={14} color="#8A5F16" /> Upload Encoded Excel</button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} />
+      </div>);
+    }
+
     /* ---------- main app ---------- */
     function App(){
       const [tab, setTab] = useState("establishments");
@@ -748,6 +958,8 @@
         <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
         <h1 className="title">Tourism Establishment &amp; Attraction Inventory</h1>
         <div className="subtitle">Data inventory management for provincial tourism establishments and natural/cultural attractions.</div>
+
+        <BackupToolbar establishments={establishments} attractions={attractions} setEstablishments={setEstablishments} setAttractions={setAttractions} />
 
         <div className="section-tabs">
           <button className={"section-tab " + (tab==="establishments"?"active":"")} onClick={()=>setTab("establishments")}>
