@@ -807,7 +807,7 @@
         {view==="dashboard" ? (
           <div>
             <div className="stat-cards">
-              <StatCard label="Total Enterprises" value={data.length} />
+              <StatCard label="Total Establishments" value={data.length} />
               <StatCard label="Accredited (Valid)" value={data.filter(d=>getAccredState(d)==="Accredited").length} />
               <StatCard label="Accreditation Expired" value={data.filter(d=>getAccredState(d)==="Expired").length} />
               <StatCard label="Not Accredited" value={data.filter(d=>getAccredState(d)==="Not Accredited").length} />
