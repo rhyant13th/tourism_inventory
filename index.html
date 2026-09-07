@@ -143,7 +143,7 @@
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react">
-    const { useState, useMemo, useRef } = React;
+    const { useState, useMemo, useRef, useEffect } = React;
 
     /* ---------- backup / export helpers ---------- */
     function pad(n){ return String(n).padStart(2,"0"); }
@@ -176,6 +176,47 @@
     const ACCRED_STATUSES = ["Accredited","Not Accredited"];
     const ESTAB_STATUSES = ["Active","Not Active","Others"];
     const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
+    const TOURLISTA_OPTIONS = ["Yes","No"];
+
+    function todayISO(){ return new Date().toISOString().slice(0,10); }
+    function getAccredState(d){
+      if(d.accredStatus !== "Accredited") return "Not Accredited";
+      if(d.accredValidity && d.accredValidity < todayISO()) return "Expired";
+      return "Accredited";
+    }
+    function totalEmployees(d){
+      return (Number(d.maleEmployees)||0) + (Number(d.femaleEmployees)||0);
+    }
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function dateToISO(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+    // Converts whatever Excel/typed value we get (JS Date, Excel serial number, or text like
+    // "05/01/2027") into a canonical "YYYY-MM-DD" string so date comparisons always work.
+    function excelValueToISODate(v){
+      if(v instanceof Date && !isNaN(v)) return dateToISO(v);
+      if(typeof v === "number" && isFinite(v)){
+        const parsed = XLSX.SSF ? XLSX.SSF.parse_date_code(v) : null;
+        if(parsed) return parsed.y+"-"+pad2(parsed.m)+"-"+pad2(parsed.d);
+      }
+      const s = String(v||"").trim();
+      if(!s) return "";
+      if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const parsed = new Date(s);
+      if(!isNaN(parsed)) return dateToISO(parsed);
+      return s;
+    }
+    // Nicely formatted, human-readable version for display only — comparisons always use the ISO value.
+    function formatDateDisplay(iso){
+      if(!iso) return "";
+      const d = new Date(iso+"T00:00:00");
+      if(isNaN(d)) return iso;
+      return d.toLocaleDateString(undefined, { year:"numeric", month:"short", day:"numeric" });
+    }
+    // For writing a real Excel date cell (so it displays formatted, not as plain text).
+    function isoToDateObj(iso){
+      if(!iso) return "";
+      const d = new Date(iso+"T00:00:00");
+      return isNaN(d) ? "" : d;
+    }
 
     const ATTRACTION_CATEGORIES = {
       "Nature":[
@@ -264,8 +305,9 @@
     const ESTAB_HEADERS = [
       "No.","Name of Establishment","Proprietor / Owner","Municipality","Classification","Type",
       "Address","Contact Number","Email Address","Number of Rooms","Male Employees","Female Employees",
-      "Remarks","Year Established / Registered","Status of Accreditation","Accreditation Number",
-      "Accreditation Validity","Status of Establishment",
+      "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
+      "Accreditation Status (Computed)","Accreditation Number","Accreditation Validity",
+      "Registered on TourLISTA","Status of Establishment",
     ];
     const ATTR_HEADERS = [
       "No.","Municipality","Name of Attraction","Year Established","Status","Attraction Category",
@@ -276,7 +318,8 @@
       return list.map((d,i)=>[
         i+1, d.name||"", d.proprietor||"", d.municipality||"", d.classification||"", d.type||"",
         d.address||"", d.contact||"", d.email||"", d.rooms||"", d.maleEmployees||"", d.femaleEmployees||"",
-        d.remarks||"", d.year||"", d.accredStatus||"", d.accredNumber||"", d.accredValidity||"",
+        totalEmployees(d), d.remarks||"", d.year||"", d.accredStatus||"", getAccredState(d),
+        d.accredNumber||"", isoToDateObj(d.accredValidity), d.tourlista||"No",
         (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
       ]);
     }
@@ -307,6 +350,14 @@
 
       const wsEstab = XLSX.utils.aoa_to_sheet([ESTAB_HEADERS, ...buildEstabRows(establishments)]);
       wsEstab['!cols'] = ESTAB_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
+      const validityColIdx = ESTAB_HEADERS.indexOf("Accreditation Validity");
+      if(validityColIdx > -1 && wsEstab['!ref']){
+        const range = XLSX.utils.decode_range(wsEstab['!ref']);
+        for(let r = range.s.r + 1; r <= range.e.r; r++){
+          const cell = wsEstab[XLSX.utils.encode_cell({ r, c: validityColIdx })];
+          if(cell && cell.t === 'd') cell.z = 'yyyy-mm-dd';
+        }
+      }
       XLSX.utils.book_append_sheet(wb, wsEstab, "Establishments");
 
       const wsAttr = XLSX.utils.aoa_to_sheet([ATTR_HEADERS, ...buildAttrRows(attractions)]);
@@ -322,7 +373,14 @@
     function matchFromList(value, list){
       const cleaned = stripListPrefix(value);
       if(!cleaned) return "";
-      const found = list.find(item => normalizeKey(item) === normalizeKey(cleaned));
+      const key = normalizeKey(cleaned);
+      let found = list.find(item => normalizeKey(item) === key);
+      if(!found){
+        found = list.find(item => {
+          const ik = normalizeKey(item);
+          return ik.startsWith(key) || key.startsWith(ik);
+        });
+      }
       return found || cleaned;
     }
 
@@ -367,9 +425,10 @@
           femaleEmployees: String(row["Female Employees"]||"").trim(), remarks: String(row["Remarks"]||"").trim(),
           accredStatus: ACCRED_STATUSES.includes(rawAccred) ? rawAccred : "Not Accredited",
           accredNumber: String(row["Accreditation Number"]||"").trim(),
-          accredValidity: String(row["Accreditation Validity"]||"").trim(),
+          accredValidity: excelValueToISODate(row["Accreditation Validity"]),
           status, statusOthers: status==="Others" ? stripListPrefix(row["Status of Establishment"]) : "",
           year: String(row["Year Established / Registered"]||"").trim(),
+          tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
         });
       });
 
@@ -395,6 +454,22 @@
       });
 
       return { establishments, estabSkipped, attractions, attrSkipped };
+    }
+
+    /* ---------- cloud persistence (Firestore) ---------- */
+    const CLOUD_DOC = () => window.db.collection("inventory").doc("data");
+
+    async function saveInventoryToCloud(establishments, attractions){
+      await CLOUD_DOC().set({
+        establishments, attractions,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    async function loadInventoryFromCloud(){
+      const snap = await CLOUD_DOC().get();
+      if(!snap.exists) return null;
+      return snap.data();
     }
 
     /* ---------- icons (inline SVG) ---------- */
@@ -496,7 +571,8 @@
       name: "", proprietor: "", email: "", municipality: "", classification: "",
       type: "", address: "", contact: "", rooms: "", maleEmployees: "",
       femaleEmployees: "", remarks: "", accredStatus: "Not Accredited",
-      accredNumber: "", accredValidity: "", status: "Active", statusOthers: "", year: ""
+      accredNumber: "", accredValidity: "", status: "Active", statusOthers: "", year: "",
+      tourlista: "No"
     };
 
     function EstablishmentForm({initial, onCancel, onSave}){
@@ -570,6 +646,11 @@
           {f.status==="Others" && (
             <Field label="Please specify"><input type="text" value={f.statusOthers} onChange={set("statusOthers")} placeholder="Specify status" /></Field>
           )}
+          <Field label="Registered on TourLISTA?">
+            <select value={f.tourlista||"No"} onChange={set("tourlista")}>
+              {TOURLISTA_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
+          </Field>
         </div>
         <div className="form-actions">
           <button className="btn" onClick={onCancel}>Cancel</button>
@@ -670,8 +751,9 @@
       const options = useMemo(()=>({
         municipality: MUNICIPALITIES,
         type: [...new Set(data.map(d=>d.type))].sort(),
-        accredStatus: ACCRED_STATUSES,
+        accredStatus: ["Accredited","Expired","Not Accredited"],
         classification: CLASSIFICATIONS,
+        tourlista: TOURLISTA_OPTIONS,
         year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
       }), [data]);
 
@@ -680,7 +762,8 @@
         if(filters.municipality && d.municipality!==filters.municipality) return false;
         if(filters.classification && d.classification!==filters.classification) return false;
         if(filters.type && d.type!==filters.type) return false;
-        if(filters.accredStatus && d.accredStatus!==filters.accredStatus) return false;
+        if(filters.accredStatus && getAccredState(d)!==filters.accredStatus) return false;
+        if(filters.tourlista && (d.tourlista||"No")!==filters.tourlista) return false;
         if(filters.year && d.year!==filters.year) return false;
         return true;
       }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
@@ -725,8 +808,11 @@
           <div>
             <div className="stat-cards">
               <StatCard label="Total Establishments" value={data.length} />
-              <StatCard label="Accredited" value={data.filter(d=>d.accredStatus==="Accredited").length} />
-              <StatCard label="Not Accredited" value={data.filter(d=>d.accredStatus==="Not Accredited").length} />
+              <StatCard label="Accredited (Valid)" value={data.filter(d=>getAccredState(d)==="Accredited").length} />
+              <StatCard label="Accreditation Expired" value={data.filter(d=>getAccredState(d)==="Expired").length} />
+              <StatCard label="Not Accredited" value={data.filter(d=>getAccredState(d)==="Not Accredited").length} />
+              <StatCard label="On TourLISTA" value={data.filter(d=>d.tourlista==="Yes").length} />
+              <StatCard label="Total Employees" value={data.reduce((sum,d)=>sum+totalEmployees(d),0)} />
               <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
             </div>
             <div className="charts-grid">
@@ -752,16 +838,27 @@
               {key:"classification", label:"Classification"},
               {key:"type", label:"Type"},
               {key:"accredStatus", label:"Accreditation"},
+              {key:"tourlista", label:"TourLISTA"},
               {key:"year", label:"Year"},
             ]} />
             <div className="table-wrap">
               <table>
-                <thead><tr>{["Establishment","Municipality","Rooms","Male","Female","Remarks","Type","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Establishment","Municipality","Rooms","Male","Female","Total Employees","Type","Accreditation","TourLISTA","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {filtered.map((d,i)=>(
+                  {filtered.map((d,i)=>{
+                    const accredState = getAccredState(d);
+                    return (
                     <tr key={d.id} className={i%2?"odd":""}>
                       <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
-                      <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td><td>{d.remarks}</td><td>{d.type}</td><td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
+                      <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td>
+                      <td>{totalEmployees(d)}</td>
+                      <td>{d.type}</td>
+                      <td>
+                        <Pill tone={accredState==="Accredited"?"teal":accredState==="Expired"?"danger":"gold"}>{accredState}</Pill>
+                        {d.accredValidity && <div className="cell-sub">{accredState==="Expired" ? "Expired on " : "Valid until "}{formatDateDisplay(d.accredValidity)}</div>}
+                      </td>
+                      <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
+                      <td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
                       <td>
                         <div style={{display:"flex",gap:10}}>
                           <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
@@ -769,8 +866,9 @@
                         </div>
                       </td>
                     </tr>
-                  ))}
-                  {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No establishments match these filters.</td></tr>}
+                    );
+                  })}
+                  {filtered.length===0 && <tr><td colSpan="11" className="empty-row">No establishments match these filters.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -884,7 +982,7 @@
     }
 
     /* ---------- backup / submission toolbar ---------- */
-    function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions }){
+    function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, onSave }){
       const fileRef = useRef(null);
 
       const handleExport = () => {
@@ -898,7 +996,7 @@
         const reader = new FileReader();
         reader.onload = (evt) => {
           try {
-            const wb = XLSX.read(evt.target.result, { type: "array" });
+            const wb = XLSX.read(evt.target.result, { type: "array", cellDates: true });
             const { establishments: newEstab, estabSkipped, attractions: newAttr, attrSkipped } = parseImportedWorkbook(wb);
 
             const existingEstabKeys = new Set(establishments.map(d => (d.name+"|"+d.municipality).toLowerCase()));
@@ -940,8 +1038,17 @@
         reader.readAsArrayBuffer(file);
       };
 
+      const statusText = cloudStatus === "loading" ? "Loading saved data…"
+        : cloudStatus === "saving" ? "Saving…"
+        : cloudStatus === "error" ? "Could not reach the cloud — check your connection."
+        : lastSaved ? "Last saved: " + new Date(lastSaved).toLocaleString()
+        : "Not saved yet.";
+
       return (<div className="data-toolbar">
-        <div className="grow"><b>Backup &amp; Submission:</b> Download the inventory as an Excel file to back up or submit to the national agency — fill it in (here or offline), then upload it back to bulk-add records instead of encoding one by one.</div>
+        <div className="grow"><b>Backup &amp; Submission:</b> Download the inventory as an Excel file to back up or submit to the national agency — fill it in (here or offline), then upload it back to bulk-add records instead of encoding one by one.
+          <div style={{fontSize:12, color: cloudStatus==="error" ? "#A8442D" : "#5E6E6A", marginTop:4}}>{statusText}</div>
+        </div>
+        <button className="btn btn-primary" onClick={onSave} disabled={cloudStatus==="saving"}><Icon d={ICONS.download} size={14} color="#fff" /> {cloudStatus==="saving" ? "Saving…" : "Save"}</button>
         <button className="btn btn-outline-teal" onClick={handleExport}><Icon d={ICONS.download} size={14} color="#1C6B6E" /> Download Excel Backup</button>
         <button className="btn btn-outline-gold" onClick={()=>fileRef.current.click()}><Icon d={ICONS.upload} size={14} color="#8A5F16" /> Upload Encoded Excel</button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} />
@@ -953,13 +1060,49 @@
       const [tab, setTab] = useState("establishments");
       const [establishments, setEstablishments] = useState([]);
       const [attractions, setAttractions] = useState([]);
+      const [cloudStatus, setCloudStatus] = useState("loading");
+      const [lastSaved, setLastSaved] = useState(null);
+
+      useEffect(() => {
+        let cancelled = false;
+        loadInventoryFromCloud().then(data => {
+          if(cancelled) return;
+          if(data){
+            setEstablishments(Array.isArray(data.establishments) ? data.establishments : []);
+            setAttractions(Array.isArray(data.attractions) ? data.attractions : []);
+            if(data.updatedAt) setLastSaved(data.updatedAt);
+          }
+          setCloudStatus("idle");
+        }).catch(err => {
+          console.error(err);
+          if(!cancelled) setCloudStatus("error");
+        });
+        return () => { cancelled = true; };
+      }, []);
+
+      const handleSave = async () => {
+        setCloudStatus("saving");
+        try {
+          await saveInventoryToCloud(establishments, attractions);
+          setLastSaved(new Date().toISOString());
+          setCloudStatus("idle");
+        } catch(err){
+          console.error(err);
+          setCloudStatus("error");
+          alert("Could not save to the cloud. Please check your internet connection and try again.");
+        }
+      };
 
       return (<div className="app">
         <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
         <h1 className="title">Tourism Establishment &amp; Attraction Inventory</h1>
         <div className="subtitle">Data inventory management for provincial tourism establishments and natural/cultural attractions.</div>
 
-        <BackupToolbar establishments={establishments} attractions={attractions} setEstablishments={setEstablishments} setAttractions={setAttractions} />
+        <BackupToolbar
+          establishments={establishments} attractions={attractions}
+          setEstablishments={setEstablishments} setAttractions={setAttractions}
+          cloudStatus={cloudStatus} lastSaved={lastSaved} onSave={handleSave}
+        />
 
         <div className="section-tabs">
           <button className={"section-tab " + (tab==="establishments"?"active":"")} onClick={()=>setTab("establishments")}>
