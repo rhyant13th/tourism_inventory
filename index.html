@@ -459,15 +459,26 @@
     /* ---------- cloud persistence (Firestore) ---------- */
     const CLOUD_DOC = () => window.db.collection("inventory").doc("data");
 
+    function withTimeout(promise, ms, label){
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(
+          label + " is taking too long (over " + Math.round(ms/1000) + "s). " +
+          "This usually means the connection to the cloud database is being blocked — check for an ad-blocker/privacy " +
+          "extension blocking Google/Firebase domains, a firewall, or that this page isn't opened directly as a local file."
+        )), ms)),
+      ]);
+    }
+
     async function saveInventoryToCloud(establishments, attractions){
-      await CLOUD_DOC().set({
+      await withTimeout(CLOUD_DOC().set({
         establishments, attractions,
         updatedAt: new Date().toISOString(),
-      });
+      }), 15000, "Saving");
     }
 
     async function loadInventoryFromCloud(){
-      const snap = await CLOUD_DOC().get();
+      const snap = await withTimeout(CLOUD_DOC().get(), 15000, "Loading");
       if(!snap.exists) return null;
       return snap.data();
     }
@@ -982,7 +993,7 @@
     }
 
     /* ---------- backup / submission toolbar ---------- */
-    function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, onSave }){
+    function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, cloudError, onSave }){
       const fileRef = useRef(null);
 
       const handleExport = () => {
@@ -1040,7 +1051,7 @@
 
       const statusText = cloudStatus === "loading" ? "Loading saved data…"
         : cloudStatus === "saving" ? "Saving…"
-        : cloudStatus === "error" ? "Could not reach the cloud — check your connection."
+        : cloudStatus === "error" ? (cloudError || "Could not reach the cloud — check your connection.")
         : lastSaved ? "Last saved: " + new Date(lastSaved).toLocaleString()
         : "Not saved yet.";
 
@@ -1062,6 +1073,7 @@
       const [attractions, setAttractions] = useState([]);
       const [cloudStatus, setCloudStatus] = useState("loading");
       const [lastSaved, setLastSaved] = useState(null);
+      const [cloudError, setCloudError] = useState("");
 
       useEffect(() => {
         let cancelled = false;
@@ -1075,7 +1087,7 @@
           setCloudStatus("idle");
         }).catch(err => {
           console.error(err);
-          if(!cancelled) setCloudStatus("error");
+          if(!cancelled){ setCloudStatus("error"); setCloudError(err && err.message ? err.message : "Unknown error."); }
         });
         return () => { cancelled = true; };
       }, []);
@@ -1089,7 +1101,8 @@
         } catch(err){
           console.error(err);
           setCloudStatus("error");
-          alert("Could not save to the cloud. Please check your internet connection and try again.");
+          setCloudError(err && err.message ? err.message : "Unknown error.");
+          alert("Save failed: " + (err && err.message ? err.message : "Unknown error. Check the browser console for details."));
         }
       };
 
@@ -1101,7 +1114,7 @@
         <BackupToolbar
           establishments={establishments} attractions={attractions}
           setEstablishments={setEstablishments} setAttractions={setAttractions}
-          cloudStatus={cloudStatus} lastSaved={lastSaved} onSave={handleSave}
+          cloudStatus={cloudStatus} lastSaved={lastSaved} cloudError={cloudError} onSave={handleSave}
         />
 
         <div className="section-tabs">
