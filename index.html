@@ -102,6 +102,8 @@
     .clear-btn { font-size: 12px; font-weight: 700; color: var(--teal); background: none; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; cursor: pointer; height: 36px; }
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+    table.table-even { table-layout: fixed; }
+    table.table-even th, table.table-even td { overflow-wrap: break-word; word-break: break-word; white-space: normal; }
     thead tr { background: var(--navy); color: #fff; }
     th { text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 700; }
     td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; }
@@ -177,6 +179,8 @@
     const ESTAB_STATUSES = ["Active","Not Active","Others"];
     const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
     const TOURLISTA_OPTIONS = ["Yes","No"];
+    const PHYSICAL_CONDITIONS = ["Lost/Destroyed","Critical","Poor","Fair","Good","Excellent"];
+    const DECLARATION_STATUSES = ["Nationally Declared","Locally Declared","Registered","Unregistered/For Validation"];
 
     function todayISO(){ return new Date().toISOString().slice(0,10); }
     function getAccredState(d){
@@ -186,6 +190,18 @@
     }
     function totalEmployees(d){
       return (Number(d.maleEmployees)||0) + (Number(d.femaleEmployees)||0);
+    }
+    function conditionTone(condition){
+      if(condition==="Lost/Destroyed" || condition==="Critical") return "danger";
+      if(condition==="Poor") return "gold";
+      if(condition==="Good" || condition==="Excellent") return "teal";
+      return "grey";
+    }
+    function declarationTone(status){
+      if(status==="Nationally Declared" || status==="Locally Declared") return "teal";
+      if(status==="Registered") return "grey";
+      if(status==="Unregistered/For Validation") return "gold";
+      return "grey";
     }
     function pad2(n){ return String(n).padStart(2,"0"); }
     function dateToISO(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
@@ -310,8 +326,9 @@
       "Registered on TourLISTA","Status of Establishment",
     ];
     const ATTR_HEADERS = [
-      "No.","Municipality","Name of Attraction","Year Established","Status","Attraction Category",
-      "Attraction Code","Code Description","Latitude","Longitude",
+      "No.","Municipality","Name of Attraction","Year Established","Status","Physical Condition",
+      "Declaration Status","Attraction Category","Attraction Code","Code Description",
+      "Remarks/Description","Latitude","Longitude",
     ];
 
     function buildEstabRows(list){
@@ -325,8 +342,9 @@
     }
     function buildAttrRows(list){
       return list.map((d,i)=>[
-        i+1, d.municipality||"", d.name||"", d.yearEstablished||"", d.selection||"", d.category||"", d.code||"",
-        (ATTRACTION_CODE_INDEX[d.code]||{}).label || "", d.latitude||"", d.longitude||"",
+        i+1, d.municipality||"", d.name||"", d.yearEstablished||"", d.selection||"", d.physicalCondition||"",
+        d.declarationStatus||"", d.category||"", d.code||"", (ATTRACTION_CODE_INDEX[d.code]||{}).label || "",
+        d.remarks||"", d.latitude||"", d.longitude||"",
       ]);
     }
 
@@ -443,11 +461,16 @@
         if(code && !ATTRACTION_CATEGORIES[category]) category = ATTRACTION_CODE_INDEX[code].category;
         if(!name || !municipality || !category || !code){ attrSkipped++; return; }
         const rawSelection = matchFromList(row["Status"], ATTRACTION_SELECTIONS);
+        const rawPhysicalCondition = matchFromList(row["Physical Condition"], PHYSICAL_CONDITIONS);
+        const rawDeclarationStatus = matchFromList(row["Declaration Status"], DECLARATION_STATUSES);
         attractions.push({
           municipality, name,
           yearEstablished: String(row["Year Established"]||"").trim(),
           selection: ATTRACTION_SELECTIONS.includes(rawSelection) ? rawSelection : "Existing",
           category, code,
+          physicalCondition: PHYSICAL_CONDITIONS.includes(rawPhysicalCondition) ? rawPhysicalCondition : "",
+          declarationStatus: DECLARATION_STATUSES.includes(rawDeclarationStatus) ? rawDeclarationStatus : "",
+          remarks: String(row["Remarks/Description"]||"").trim(),
           latitude: String(row["Latitude"]||"").trim(),
           longitude: String(row["Longitude"]||"").trim(),
         });
@@ -671,7 +694,7 @@
     }
 
     /* ---------- attraction form ---------- */
-    const emptyAttraction = {municipality:"",yearEstablished:"",name:"",selection:"Existing",category:"",code:"",latitude:"",longitude:""};
+    const emptyAttraction = {municipality:"",yearEstablished:"",name:"",selection:"Existing",physicalCondition:"",declarationStatus:"",category:"",code:"",remarks:"",latitude:"",longitude:""};
 
     function AttractionForm({initial, onCancel, onSave}){
       const [f, setF] = useState(initial || emptyAttraction);
@@ -706,6 +729,18 @@
               {ATTRACTION_SELECTIONS.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </Field>
+          <Field label="Physical Condition">
+            <select value={f.physicalCondition||""} onChange={set("physicalCondition")}>
+              <option value="">Select condition</option>
+              {PHYSICAL_CONDITIONS.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </Field>
+          <Field label="Declaration Status">
+            <select value={f.declarationStatus||""} onChange={set("declarationStatus")}>
+              <option value="">Select status</option>
+              {DECLARATION_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </Field>
           <Field label="Attraction Category" required>
             <select value={f.category} onChange={set("category")}>
               <option value="">Select category</option>
@@ -720,6 +755,9 @@
           </Field>
           <Field label="Latitude"><input type="text" value={f.latitude} onChange={set("latitude")} placeholder="e.g. 12.6625" /></Field>
           <Field label="Longitude"><input type="text" value={f.longitude} onChange={set("longitude")} placeholder="e.g. 120.4855" /></Field>
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Remarks / Description"><input type="text" value={f.remarks||""} onChange={set("remarks")} placeholder="Optional remarks or description of the attraction" /></Field>
+          </div>
         </div>
         <div className="form-actions">
           <button className="btn" onClick={onCancel}>Cancel</button>
@@ -908,6 +946,8 @@
         municipality: MUNICIPALITIES,
         category: Object.keys(ATTRACTION_CATEGORIES),
         selection: ATTRACTION_SELECTIONS,
+        physicalCondition: PHYSICAL_CONDITIONS,
+        declarationStatus: DECLARATION_STATUSES,
       }), []);
 
       const filtered = useMemo(()=>data.filter(d=>{
@@ -915,8 +955,27 @@
         if(filters.municipality && d.municipality!==filters.municipality) return false;
         if(filters.category && d.category!==filters.category) return false;
         if(filters.selection && d.selection!==filters.selection) return false;
+        if(filters.physicalCondition && d.physicalCondition!==filters.physicalCondition) return false;
+        if(filters.declarationStatus && d.declarationStatus!==filters.declarationStatus) return false;
         return true;
       }), [data, filters]);
+
+      const byMunicipality = useMemo(()=>{
+        const m = {}; data.forEach(d=>{ m[d.municipality]=(m[d.municipality]||0)+1; });
+        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+      }, [data]);
+      const byCategory = useMemo(()=>{
+        const m = {}; data.forEach(d=>{ m[d.category]=(m[d.category]||0)+1; });
+        return Object.entries(m).map(([name,value])=>({name,value}));
+      }, [data]);
+      const byPhysicalCondition = useMemo(()=>{
+        const m = {}; data.forEach(d=>{ const k = d.physicalCondition || "Not Specified"; m[k]=(m[k]||0)+1; });
+        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+      }, [data]);
+      const byDeclarationStatus = useMemo(()=>{
+        const m = {}; data.forEach(d=>{ const k = d.declarationStatus || "Not Specified"; m[k]=(m[k]||0)+1; });
+        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+      }, [data]);
 
       const save = (f) => {
         if(modal.mode==="edit"){
@@ -948,6 +1007,27 @@
               <StatCard label="Existing" value={data.filter(d=>d.selection==="Existing").length} />
               <StatCard label="Potential" value={data.filter(d=>d.selection==="Potential").length} />
               <StatCard label="Emerging" value={data.filter(d=>d.selection==="Emerging").length} />
+              <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
+              <StatCard label="Declared (National/Local)" value={data.filter(d=>d.declarationStatus==="Nationally Declared"||d.declarationStatus==="Locally Declared").length} />
+              <StatCard label="Good / Excellent Condition" value={data.filter(d=>d.physicalCondition==="Good"||d.physicalCondition==="Excellent").length} />
+            </div>
+            <div className="charts-grid">
+              <div className="panel">
+                <div className="panel-title">Per Municipality</div>
+                <BarList data={byMunicipality} color="#1C6B6E" />
+              </div>
+              <div className="panel">
+                <div className="panel-title">Per Category</div>
+                <Donut data={byCategory} total={data.length} />
+              </div>
+              <div className="panel span-2">
+                <div className="panel-title">Per Physical Condition</div>
+                <BarList data={byPhysicalCondition} color="#C08A2E" />
+              </div>
+              <div className="panel span-2">
+                <div className="panel-title">Per Declaration Status</div>
+                <BarList data={byDeclarationStatus} color="#0E3B3C" />
+              </div>
             </div>
           </div>
         ) : (
@@ -957,15 +1037,30 @@
               {key:"municipality", label:"Municipality"},
               {key:"category", label:"Category"},
               {key:"selection", label:"Status"},
+              {key:"physicalCondition", label:"Physical Condition"},
+              {key:"declarationStatus", label:"Declaration Status"},
             ]} />
             <div className="table-wrap">
-              <table>
-                <thead><tr>{["Attraction","Municipality","Category","Code","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+              <table className="table-even">
+                {(() => {
+                  const cols = ["Attraction","Municipality","Category","Code","Status","Physical Condition","Declaration Status","Remarks / Description","Actions"];
+                  const pct = (100/cols.length).toFixed(4)+"%";
+                  return (<React.Fragment>
+                    <colgroup>{cols.map(h=><col key={h} style={{width:pct}} />)}</colgroup>
+                    <thead><tr>{cols.map(h=><th key={h}>{h}</th>)}</tr></thead>
+                  </React.Fragment>);
+                })()}
                 <tbody>
                   {filtered.map((d,i)=>(
                     <tr key={d.id} className={i%2?"odd":""}>
                       <td><div style={{fontWeight:600}}>{d.name}</div></td>
-                      <td>{d.municipality}</td><td>{d.category}</td><td>{d.code}</td><td><Pill tone="teal">{d.selection}</Pill></td>
+                      <td>{d.municipality}</td>
+                      <td>{d.category}</td>
+                      <td>{d.code}</td>
+                      <td><Pill tone="teal">{d.selection}</Pill></td>
+                      <td>{d.physicalCondition ? <Pill tone={conditionTone(d.physicalCondition)}>{d.physicalCondition}</Pill> : <span className="cell-sub">—</span>}</td>
+                      <td>{d.declarationStatus ? <Pill tone={declarationTone(d.declarationStatus)}>{d.declarationStatus}</Pill> : <span className="cell-sub">—</span>}</td>
+                      <td>{d.remarks || <span className="cell-sub">—</span>}</td>
                       <td>
                         <div style={{display:"flex",gap:10}}>
                           <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
@@ -974,7 +1069,7 @@
                       </td>
                     </tr>
                   ))}
-                  {filtered.length===0 && <tr><td colSpan="6" className="empty-row">No attractions match these filters.</td></tr>}
+                  {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No attractions match these filters.</td></tr>}
                 </tbody>
               </table>
             </div>
