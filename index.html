@@ -147,21 +147,12 @@
   <script type="text/babel" data-presets="react">
     const { useState, useMemo, useRef, useEffect } = React;
 
-    /* ---------- backup / export helpers ---------- */
     function pad(n){ return String(n).padStart(2,"0"); }
     function timestamp(){
       const d = new Date();
       return d.getFullYear()+""+pad(d.getMonth()+1)+pad(d.getDate())+"-"+pad(d.getHours())+pad(d.getMinutes());
     }
-    function triggerDownload(blob, filename){
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
 
-    /* ---------- constants ---------- */
     const PRIMARY_TYPES = [
       "Hotel","Resort","Apartment Hotel","Mabuhay Accommodation","Homestay",
       "Travel and Tour Agency","Travel Agency","Tour Operator","Online Travel Agency",
@@ -192,9 +183,6 @@
     function totalEmployees(d){
       return (Number(d.maleEmployees)||0) + (Number(d.femaleEmployees)||0);
     }
-    // Accreditation history helpers — accredHistory is the historical record of every
-    // accreditation period (type, number, accreditation date, and validity/expiry date) an
-    // establishment has had. It is kept separate from accredStatus (the current status).
     function normalizeAccredHistory(list){
       const seen = new Set();
       const cleaned = [];
@@ -203,7 +191,7 @@
         const number = String((h && h.number) || "").trim();
         const accredDate = String((h && h.accredDate) || "").trim();
         const validity = String((h && h.validity) || "").trim();
-        if(!type && !number && !accredDate && !validity) return; // drop fully blank rows
+        if(!type && !number && !accredDate && !validity) return;
         const key = type + "|" + number + "|" + accredDate + "|" + validity;
         if(seen.has(key)) return;
         seen.add(key);
@@ -215,12 +203,6 @@
       const m = String(iso||"").match(/^(\d{4})/);
       return m ? parseInt(m[1],10) : null;
     }
-    // Determines every calendar year covered by one accreditation record.
-    // When both an accreditation (start) date and a validity (expiry) date are on file, every
-    // calendar year the [start, end] span touches counts — e.g. Oct 31 2024 to Oct 31 2026
-    // touches 2024, 2025, and 2026. When only the expiry date is known, coverage falls back to
-    // the type's standard duration counted back from the expiry year: Regular = 2 calendar
-    // years (expiry year and the year before), Basic (or unspecified) = the expiry year only.
     function accredEntryCoverageYears(entry){
       const endY = yearOfISO(entry && entry.validity);
       if(endY===null) return [];
@@ -235,25 +217,40 @@
       for(let i=0;i<durationYears;i++) years.push(String(endY - (durationYears-1) + i));
       return years;
     }
-    // Union of every year covered by any of an establishment's accreditation records — the
-    // auto-computed "Accredited Years" field. Each year appears once even if multiple records
-    // cover it.
+
+    // UPDATED: Automatically fallback to top-level accreditation fields if accredHistory is empty
+    function getAccredHistory(d){
+      if(Array.isArray(d && d.accredHistory) && d.accredHistory.length > 0){
+        return normalizeAccredHistory(d.accredHistory);
+      }
+      if(Array.isArray(d && d.accredYears) && d.accredYears.length > 0){
+        return normalizeAccredHistory(d.accredYears.map(y => ({
+          type: "", number: "", accredDate: "",
+          validity: /^\d{4}$/.test(String(y)) ? String(y) + "-01-01" : String(y),
+        })));
+      }
+      if(d && d.accredStatus === "Accredited" && d.accredValidity){
+        return normalizeAccredHistory([{
+          type: d.accredType || "Regular",
+          number: d.accredNumber || "",
+          accredDate: "",
+          validity: d.accredValidity
+        }]);
+      }
+      return [];
+    }
+
     function establishmentAccreditedYears(d){
       const years = new Set();
       getAccredHistory(d).forEach(h => accredEntryCoverageYears(h).forEach(y => years.add(y)));
       return Array.from(years).sort();
     }
-    // Sort key for "latest first" ordering: accreditation (start) date when known, else the
-    // validity/expiry date.
     function accredEntrySortKey(entry){
       return (entry && (entry.accredDate || entry.validity)) || "";
     }
     function sortAccredHistoryDesc(list){
       return normalizeAccredHistory(list).slice().sort((a,b)=> accredEntrySortKey(b).localeCompare(accredEntrySortKey(a)));
     }
-    // Same "latest first" ordering as sortAccredHistoryDesc, but for the form: keeps blank/
-    // in-progress rows (normalizeAccredHistory would drop them) and pairs each entry with its
-    // original index in the raw array so edits/removals target the right row.
     function sortedAccredHistoryForForm(list){
       return (list||[]).map((h,idx)=>({h,idx})).sort((a,b)=> accredEntrySortKey(b.h).localeCompare(accredEntrySortKey(a.h)));
     }
@@ -263,19 +260,6 @@
       if(years.length===0) return typeLabel;
       const range = years.length>1 ? (years[0] + "–" + years[years.length-1]) : years[0];
       return typeLabel + " – " + range;
-    }
-    // Reads an establishment's accreditation history, transparently upgrading records saved
-    // by earlier versions (accredYears: ["2020","2021"], or {number, validity} rows with no
-    // type/accredDate) into the current shape so old data keeps working.
-    function getAccredHistory(d){
-      if(Array.isArray(d && d.accredHistory)) return normalizeAccredHistory(d.accredHistory);
-      if(Array.isArray(d && d.accredYears) && d.accredYears.length){
-        return normalizeAccredHistory(d.accredYears.map(y => ({
-          type: "", number: "", accredDate: "",
-          validity: /^\d{4}$/.test(String(y)) ? String(y) + "-01-01" : String(y),
-        })));
-      }
-      return [];
     }
     function accredHistoryToText(list){
       return normalizeAccredHistory(list)
@@ -295,9 +279,7 @@
         };
       }));
     }
-    /* ---------- duplicate-name detection ---------- */
-    // Normalizes a name for comparison: lowercase, trims, collapses internal whitespace,
-    // and strips punctuation so "The  Bay-Front Hotel" and "the bayfront hotel" line up.
+
     function normalizeForCompare(s){
       return String(s||"").toLowerCase().trim().replace(/\s+/g," ").replace(/[^\w\s]/g,"");
     }
@@ -315,8 +297,6 @@
       }
       return dp[m][n];
     }
-    // True for exact matches (ignoring case/spacing/punctuation) and for names close enough
-    // to likely be a typo of one another (similarity >= 85%).
     function isSimilarName(a,b){
       const na = normalizeForCompare(a), nb = normalizeForCompare(b);
       if(!na || !nb) return false;
@@ -343,8 +323,6 @@
     }
     function pad2(n){ return String(n).padStart(2,"0"); }
     function dateToISO(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
-    // Converts whatever Excel/typed value we get (JS Date, Excel serial number, or text like
-    // "05/01/2027") into a canonical "YYYY-MM-DD" string so date comparisons always work.
     function excelValueToISODate(v){
       if(v instanceof Date && !isNaN(v)) return dateToISO(v);
       if(typeof v === "number" && isFinite(v)){
@@ -358,14 +336,12 @@
       if(!isNaN(parsed)) return dateToISO(parsed);
       return s;
     }
-    // Nicely formatted, human-readable version for display only — comparisons always use the ISO value.
     function formatDateDisplay(iso){
       if(!iso) return "";
       const d = new Date(iso+"T00:00:00");
       if(isNaN(d)) return iso;
       return d.toLocaleDateString(undefined, { year:"numeric", month:"short", day:"numeric" });
     }
-    // For writing a real Excel date cell (so it displays formatted, not as plain text).
     function isoToDateObj(iso){
       if(!iso) return "";
       const d = new Date(iso+"T00:00:00");
@@ -449,13 +425,11 @@
 
     const PIE_COLORS = ["#1C6B6E","#C08A2E","#0E3B3C","#2B7A57","#A8442D","#8A9B97"];
 
-    /* ---------- attraction code lookup (code -> category + label) ---------- */
     const ATTRACTION_CODE_INDEX = {};
     Object.entries(ATTRACTION_CATEGORIES).forEach(([cat, items]) => {
       items.forEach(it => { ATTRACTION_CODE_INDEX[it.code] = { category: cat, label: it.label }; });
     });
 
-    /* ---------- excel backup / submission format ---------- */
     const ESTAB_HEADERS = [
       "No.","Name of Establishment","Proprietor / Owner","Municipality","Classification","Type",
       "Address","Contact Number","Email Address","Number of Rooms","Male Employees","Female Employees",
@@ -526,7 +500,6 @@
       XLSX.writeFile(wb, "Tourism-Inventory-Backup-" + timestamp() + ".xlsx");
     }
 
-    /* ---------- normalization helpers for flexible excel encoding ---------- */
     function normalizeKey(s){ return String(s||"").trim().toLowerCase(); }
     function stripListPrefix(s){ return String(s||"").replace(/^\s*\d+[\.\)]\s*/, "").trim(); }
     function matchFromList(value, list){
@@ -576,6 +549,17 @@
         const rawStatus = matchFromList(row["Status of Establishment"], ESTAB_STATUSES) || "Active";
         const status = ESTAB_STATUSES.includes(rawStatus) ? rawStatus : "Others";
         const rawAccred = matchFromList(row["Status of Accreditation"], ACCRED_STATUSES);
+        
+        let accredHistory = parseAccredHistoryText(row["Accreditation History (Type|Number|AccredDate|Validity; ...)"]);
+        const accredValidity = excelValueToISODate(row["Accreditation Validity"]);
+        const accredType = matchFromList(row["Accreditation Type"], ACCRED_TYPES);
+        const accredNumber = String(row["Accreditation Number"]||"").trim();
+
+        // Automatically populate history if text column was blank but current validity exists
+        if(accredHistory.length === 0 && rawAccred === "Accredited" && accredValidity){
+          accredHistory = [{ type: accredType || "Regular", number: accredNumber, accredDate: "", validity: accredValidity }];
+        }
+
         establishments.push({
           name, proprietor: String(row["Proprietor / Owner"]||"").trim(),
           email: String(row["Email Address"]||"").trim(), municipality, classification, type,
@@ -583,10 +567,10 @@
           rooms: String(row["Number of Rooms"]||"").trim(), maleEmployees: String(row["Male Employees"]||"").trim(),
           femaleEmployees: String(row["Female Employees"]||"").trim(), remarks: String(row["Remarks"]||"").trim(),
           accredStatus: ACCRED_STATUSES.includes(rawAccred) ? rawAccred : "Not Accredited",
-          accredType: matchFromList(row["Accreditation Type"], ACCRED_TYPES),
-          accredNumber: String(row["Accreditation Number"]||"").trim(),
-          accredValidity: excelValueToISODate(row["Accreditation Validity"]),
-          accredHistory: parseAccredHistoryText(row["Accreditation History (Type|Number|AccredDate|Validity; ...)"]),
+          accredType,
+          accredNumber,
+          accredValidity,
+          accredHistory,
           status, statusOthers: status==="Others" ? stripListPrefix(row["Status of Establishment"]) : "",
           year: String(row["Year Established / Registered"]||"").trim(),
           tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
@@ -622,17 +606,12 @@
       return { establishments, estabSkipped, attractions, attrSkipped };
     }
 
-    /* ---------- cloud persistence (Firestore) ---------- */
     const CLOUD_DOC = () => window.db.collection("inventory").doc("data");
 
     function withTimeout(promise, ms, label){
       return Promise.race([
         promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(
-          label + " is taking too long (over " + Math.round(ms/1000) + "s). " +
-          "This usually means the connection to the cloud database is being blocked — check for an ad-blocker/privacy " +
-          "extension blocking Google/Firebase domains, a firewall, or that this page isn't opened directly as a local file."
-        )), ms)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(label + " timed out")), ms)),
       ]);
     }
 
@@ -649,7 +628,6 @@
       return snap.data();
     }
 
-    /* ---------- icons (inline SVG) ---------- */
     const Icon = ({d, size=16, color="currentColor"}) => (
       <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d={d} />
@@ -666,7 +644,6 @@
       upload: "M12 21V9M7 14l5-5 5 5M4 3h16",
     };
 
-    /* ---------- reusable UI components ---------- */
     function Field({label, required, children}){
       return (<label className="field">
         <span className="field-label">{label}{required && <span className="req"> *</span>}</span>
@@ -705,7 +682,6 @@
       </div>);
     }
 
-    /* bar chart list */
     function BarList({data, color}){
       const max = Math.max(1, ...data.map(d=>d.count));
       return (<div>
@@ -720,7 +696,6 @@
       </div>);
     }
 
-    /* donut chart */
     function Donut({data, total}){
       let acc = 0;
       const stops = data.map((d,i)=>{
@@ -743,7 +718,6 @@
       </div>);
     }
 
-    /* ---------- establishment form ---------- */
     const emptyEstablishment = {
       name: "", proprietor: "", email: "", municipality: "", classification: "",
       type: "", address: "", contact: "", rooms: "", maleEmployees: "",
@@ -755,6 +729,7 @@
     function EstablishmentForm({initial, onCancel, onSave, existingData}){
       const [f, setF] = useState(() => initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment);
       const [dupeWarning, setDupeWarning] = useState(null);
+      
       const set = (k) => (e) => {
         const v = e && e.target ? e.target.value : e;
         setF(prev=>{
@@ -762,9 +737,19 @@
           if(k==="classification") next.type = "";
           if(k==="accredStatus" && v==="Not Accredited"){ next.accredType=""; next.accredNumber=""; next.accredValidity=""; }
           if(k==="status" && v!=="Others") next.statusOthers = "";
+          
+          // UPDATED: Automatically sync active accreditation details into accredHistory array
+          if(["accredType", "accredNumber", "accredValidity", "accredStatus"].includes(k)){
+            if(next.accredStatus === "Accredited" && next.accredValidity){
+              const activeRecord = { type: next.accredType || "Regular", number: next.accredNumber || "", accredDate: "", validity: next.accredValidity };
+              const otherRecords = (next.accredHistory || []).filter(h => h.validity !== next.accredValidity);
+              next.accredHistory = normalizeAccredHistory([...otherRecords, activeRecord]);
+            }
+          }
           return next;
         });
       };
+
       const addHistoryEntry = () => {
         setF(prev => ({...prev, accredHistory: [...(prev.accredHistory||[]), {type:"", number:"", accredDate:"", validity:""}]}));
       };
@@ -953,9 +938,6 @@
       </div>);
     }
 
-    /* ---------- attraction form ---------- */
-    const emptyAttraction = {municipality:"",yearEstablished:"",name:"",selection:"Existing",physicalCondition:"",declarationStatus:"",category:"",code:"",remarks:"",latitude:"",longitude:""};
-
     function AttractionForm({initial, onCancel, onSave}){
       const [f, setF] = useState(initial || emptyAttraction);
       const set = (k) => (e) => {
@@ -1026,7 +1008,6 @@
       </div>);
     }
 
-    /* ---------- filter bar ---------- */
     function FilterBar({filters, setFilters, options, fields}){
       const update = (k,v) => setFilters(prev=>({...prev, [k]: v}));
       return (<div className="filter-bar">
@@ -1050,7 +1031,6 @@
       </div>);
     }
 
-    /* ---------- establishments section ---------- */
     function EstablishmentsSection({data, setData}){
       const [view, setView] = useState("dashboard");
       const [filters, setFilters] = useState({});
@@ -1092,10 +1072,6 @@
         return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
       }, [data]);
 
-      // Accreditation-by-year statistics: how many establishments were accredited during
-      // each year, based on the actual coverage of each establishment's accreditation records
-      // (accredHistory) — not just its current status. An establishment counts once per year,
-      // even if more than one of its accreditation records covers that year.
       const accredYearStats = useMemo(()=>{
         const counts = {};
         data.forEach(d=>{
@@ -1105,8 +1081,6 @@
         return Object.entries(counts).map(([year,count])=>({year,count})).sort((a,b)=>a.year.localeCompare(b.year));
       }, [data, statMunicipality]);
 
-      // "Accredited Establishments by Year" report: establishments whose accreditation
-      // coverage includes the selected year.
       const accreditedInStatYear = useMemo(()=>{
         if(!statYear) return [];
         return data.filter(d=>{
@@ -1173,7 +1147,7 @@
                   </div>
                 </div>
                 <div style={{fontSize:12, color:"var(--subtext)", marginBottom:10}}>
-                  How many establishments were accredited during each year, based on each establishment's recorded accreditation history (an establishment counts once per year it was accredited).
+                  How many establishments were accredited during each year, based on each establishment's recorded accreditation history.
                 </div>
                 {accredYearStats.length===0 ? (
                   <div style={{fontSize:13, color:"var(--subtext)"}}>No accreditation history recorded yet.</div>
@@ -1194,6 +1168,7 @@
                   <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:8}}>
                     <div style={{fontWeight:700, fontSize:13}}>Accredited Establishments by Year</div>
                     <div style={{minWidth:180}}>
+                      {/* FIXED: Dropdown options mapped directly from accredYearStats */}
                       <select value={statYear} onChange={(e)=>setStatYear(e.target.value)}>
                         <option value="">Select a year</option>
                         {accredYearStats.map(s=><option key={s.year} value={s.year}>{s.year}</option>)}
@@ -1294,7 +1269,6 @@
       </div>);
     }
 
-    /* ---------- attractions section ---------- */
     function AttractionsSection({data, setData}){
       const [view, setView] = useState("dashboard");
       const [filters, setFilters] = useState({});
@@ -1446,7 +1420,6 @@
       </div>);
     }
 
-    /* ---------- backup / submission toolbar ---------- */
     function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, cloudError, onSave }){
       const fileRef = useRef(null);
 
@@ -1520,7 +1493,6 @@
       </div>);
     }
 
-    /* ---------- main app ---------- */
     function App(){
       const [tab, setTab] = useState("establishments");
       const [establishments, setEstablishments] = useState([]);
