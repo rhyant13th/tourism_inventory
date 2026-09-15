@@ -191,6 +191,90 @@
     function totalEmployees(d){
       return (Number(d.maleEmployees)||0) + (Number(d.femaleEmployees)||0);
     }
+    // Accreditation history helpers — accredHistory is the historical record of every
+    // accreditation period (number + validity date) an establishment has had. It mirrors the
+    // current Accreditation Number / Validity fields, but keeps every past period, and is kept
+    // separate from accredStatus (the current status).
+    function normalizeAccredHistory(list){
+      const seen = new Set();
+      const cleaned = [];
+      (list||[]).forEach(h=>{
+        const number = String((h && h.number) || "").trim();
+        const validity = String((h && h.validity) || "").trim();
+        if(!number && !validity) return; // drop fully blank rows
+        const key = number + "|" + validity;
+        if(seen.has(key)) return;
+        seen.add(key);
+        cleaned.push({ number, validity });
+      });
+      return cleaned.sort((a,b)=> (a.validity||"").localeCompare(b.validity||""));
+    }
+    function accredHistoryYear(entry){
+      const v = String((entry && entry.validity) || "");
+      const m = v.match(/^(\d{4})/);
+      return m ? m[1] : "";
+    }
+    // Reads an establishment's accreditation history, transparently upgrading records saved
+    // by the earlier plain-year-list version (accredYears: ["2020","2021"]) into the current
+    // number/validity format so old data keeps working.
+    function getAccredHistory(d){
+      if(Array.isArray(d && d.accredHistory)) return normalizeAccredHistory(d.accredHistory);
+      if(Array.isArray(d && d.accredYears) && d.accredYears.length){
+        return normalizeAccredHistory(d.accredYears.map(y => ({
+          number: "",
+          validity: /^\d{4}$/.test(String(y)) ? String(y) + "-01-01" : String(y),
+        })));
+      }
+      return [];
+    }
+    function accredHistoryToText(list){
+      return normalizeAccredHistory(list).map(h => (h.number||"") + "|" + (h.validity||"")).join("; ");
+    }
+    function parseAccredHistoryText(v){
+      const s = String(v||"").trim();
+      if(!s) return [];
+      return normalizeAccredHistory(s.split(";").map(chunk=>{
+        const parts = chunk.split("|");
+        return {
+          number: (parts[0]||"").trim(),
+          validity: excelValueToISODate((parts[1]||"").trim()),
+        };
+      }));
+    }
+    /* ---------- duplicate-name detection ---------- */
+    // Normalizes a name for comparison: lowercase, trims, collapses internal whitespace,
+    // and strips punctuation so "The  Bay-Front Hotel" and "the bayfront hotel" line up.
+    function normalizeForCompare(s){
+      return String(s||"").toLowerCase().trim().replace(/\s+/g," ").replace(/[^\w\s]/g,"");
+    }
+    function levenshteinDistance(a,b){
+      const m = a.length, n = b.length;
+      if(m===0) return n;
+      if(n===0) return m;
+      const dp = Array.from({length:m+1},()=>new Array(n+1).fill(0));
+      for(let i=0;i<=m;i++) dp[i][0]=i;
+      for(let j=0;j<=n;j++) dp[0][j]=j;
+      for(let i=1;i<=m;i++){
+        for(let j=1;j<=n;j++){
+          dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1]);
+        }
+      }
+      return dp[m][n];
+    }
+    // True for exact matches (ignoring case/spacing/punctuation) and for names close enough
+    // to likely be a typo of one another (similarity >= 85%).
+    function isSimilarName(a,b){
+      const na = normalizeForCompare(a), nb = normalizeForCompare(b);
+      if(!na || !nb) return false;
+      if(na===nb) return true;
+      const dist = levenshteinDistance(na, nb);
+      const maxLen = Math.max(na.length, nb.length);
+      if(maxLen===0) return false;
+      return (1 - dist/maxLen) >= 0.85;
+    }
+    function findPossibleDuplicates(name, list, excludeId){
+      return (list||[]).filter(d => d.id!==excludeId && isSimilarName(d.name, name));
+    }
     function conditionTone(condition){
       if(condition==="Lost/Destroyed" || condition==="Critical") return "danger";
       if(condition==="Poor") return "gold";
@@ -323,7 +407,7 @@
       "Address","Contact Number","Email Address","Number of Rooms","Male Employees","Female Employees",
       "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
       "Accreditation Status (Computed)","Accreditation Number","Accreditation Validity",
-      "Registered on TourLISTA","Status of Establishment",
+      "Accreditation History (Number|Validity; ...)","Registered on TourLISTA","Status of Establishment",
     ];
     const ATTR_HEADERS = [
       "No.","Municipality","Name of Attraction","Year Established","Status","Physical Condition",
@@ -336,7 +420,8 @@
         i+1, d.name||"", d.proprietor||"", d.municipality||"", d.classification||"", d.type||"",
         d.address||"", d.contact||"", d.email||"", d.rooms||"", d.maleEmployees||"", d.femaleEmployees||"",
         totalEmployees(d), d.remarks||"", d.year||"", d.accredStatus||"", getAccredState(d),
-        d.accredNumber||"", isoToDateObj(d.accredValidity), d.tourlista||"No",
+        d.accredNumber||"", isoToDateObj(d.accredValidity), accredHistoryToText(getAccredHistory(d)),
+        d.tourlista||"No",
         (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
       ]);
     }
@@ -444,6 +529,7 @@
           accredStatus: ACCRED_STATUSES.includes(rawAccred) ? rawAccred : "Not Accredited",
           accredNumber: String(row["Accreditation Number"]||"").trim(),
           accredValidity: excelValueToISODate(row["Accreditation Validity"]),
+          accredHistory: parseAccredHistoryText(row["Accreditation History (Number|Validity; ...)"]),
           status, statusOthers: status==="Others" ? stripListPrefix(row["Status of Establishment"]) : "",
           year: String(row["Year Established / Registered"]||"").trim(),
           tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
@@ -605,12 +691,13 @@
       name: "", proprietor: "", email: "", municipality: "", classification: "",
       type: "", address: "", contact: "", rooms: "", maleEmployees: "",
       femaleEmployees: "", remarks: "", accredStatus: "Not Accredited",
-      accredNumber: "", accredValidity: "", status: "Active", statusOthers: "", year: "",
+      accredNumber: "", accredValidity: "", accredHistory: [], status: "Active", statusOthers: "", year: "",
       tourlista: "No"
     };
 
-    function EstablishmentForm({initial, onCancel, onSave}){
-      const [f, setF] = useState(initial || emptyEstablishment);
+    function EstablishmentForm({initial, onCancel, onSave, existingData}){
+      const [f, setF] = useState(() => initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment);
+      const [dupeWarning, setDupeWarning] = useState(null);
       const set = (k) => (e) => {
         const v = e && e.target ? e.target.value : e;
         setF(prev=>{
@@ -621,14 +708,66 @@
           return next;
         });
       };
+      const addHistoryEntry = () => {
+        setF(prev => ({...prev, accredHistory: [...(prev.accredHistory||[]), {number:"", validity:""}]}));
+      };
+      const updateHistoryEntry = (idx, key, value) => {
+        setF(prev => {
+          const next = (prev.accredHistory||[]).slice();
+          next[idx] = {...next[idx], [key]: value};
+          return {...prev, accredHistory: next};
+        });
+      };
+      const removeHistoryEntry = (idx) => {
+        setF(prev => {
+          const next = (prev.accredHistory||[]).slice();
+          next.splice(idx,1);
+          return {...prev, accredHistory: next};
+        });
+      };
       const typeOptions = f.classification==="Primary Enterprises" ? PRIMARY_TYPES : f.classification==="Secondary Enterprises" ? SECONDARY_TYPES : [];
       const submit = () => {
         if(!f.municipality || !f.name || !f.classification || !f.type){
           alert("Please complete municipality, name, classification, and type.");
           return;
         }
+        const cleanedForm = {...f, accredHistory: normalizeAccredHistory(f.accredHistory)};
+        const dupes = findPossibleDuplicates(cleanedForm.name, existingData, cleanedForm.id);
+        if(dupes.length){
+          setF(cleanedForm);
+          setDupeWarning(dupes);
+          return;
+        }
+        onSave(cleanedForm);
+      };
+      const confirmSaveAnyway = () => {
+        setDupeWarning(null);
         onSave(f);
       };
+
+      if(dupeWarning){
+        return (<div>
+          <div style={{background:"var(--danger-soft)", border:"1px solid var(--danger)", borderRadius:10, padding:16}}>
+            <div style={{fontWeight:700, color:"var(--danger)", fontSize:15, marginBottom:6}}>Possible Duplicate Establishment</div>
+            <div style={{fontSize:13, color:"var(--text)", marginBottom:12}}>
+              An establishment with the same or similar name already exists. Please check the existing records before saving.
+            </div>
+            <div style={{background:"#fff", border:"1px solid var(--border)", borderRadius:8, overflow:"hidden"}}>
+              {dupeWarning.map(d=>(
+                <div key={d.id} style={{padding:"8px 12px", borderTop:"1px solid var(--border)"}}>
+                  <div style={{fontWeight:600, fontSize:13}}>{d.name}</div>
+                  <div style={{fontSize:12, color:"var(--subtext)"}}>{d.municipality || "No municipality on record"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="form-actions">
+            <button className="btn" onClick={()=>setDupeWarning(null)}>Cancel / Go Back</button>
+            <button className="btn btn-primary" onClick={confirmSaveAnyway}>Continue Saving Anyway</button>
+          </div>
+        </div>);
+      }
+
       return (<div>
         <div className="form-grid">
           <Field label="Name of Establishment" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Bayfront Hotel" /></Field>
@@ -672,6 +811,34 @@
             <Field label="Accreditation Number" required><input type="text" value={f.accredNumber} onChange={set("accredNumber")} placeholder="e.g. ACC-2025-0001" /></Field>
             <Field label="Validity" required><input type="date" value={f.accredValidity} onChange={set("accredValidity")} /></Field>
           </React.Fragment>)}
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Accreditation History">
+              <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
+                Record every past accreditation period — number and validity date — the same way the current Accreditation Number / Validity fields above work. This history is kept even if the current status later changes.
+              </div>
+              {(f.accredHistory||[]).map((h, idx)=>(
+                <div key={idx} style={{display:"flex", gap:8, alignItems:"flex-end", marginBottom:8}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Accreditation Number</div>
+                    <input type="text" value={h.number} onChange={(e)=>updateHistoryEntry(idx,"number",e.target.value)} placeholder="e.g. ACC-2020-0001" />
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Validity</div>
+                    <input type="date" value={h.validity} onChange={(e)=>updateHistoryEntry(idx,"validity",e.target.value)} />
+                  </div>
+                  <button type="button" className="btn-ghost" onClick={()=>removeHistoryEntry(idx)} title="Remove this period">
+                    <Icon d={ICONS.trash} color="#A8442D" />
+                  </button>
+                </div>
+              ))}
+              {(!f.accredHistory || f.accredHistory.length===0) && (
+                <div style={{fontSize:12, color:"var(--subtext)", marginBottom:8}}>No accreditation history recorded yet.</div>
+              )}
+              <button type="button" className="btn btn-outline-teal" onClick={addHistoryEntry}>
+                <Icon d={ICONS.plus} size={13} color="#1C6B6E" /> Add Accreditation Period
+              </button>
+            </Field>
+          </div>
           <Field label="Status of Establishment">
             <select value={f.status} onChange={set("status")}>
               {ESTAB_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
@@ -796,6 +963,7 @@
       const [filters, setFilters] = useState({});
       const [modal, setModal] = useState(null);
       const [toDelete, setToDelete] = useState(null);
+      const [statMunicipality, setStatMunicipality] = useState("");
 
       const options = useMemo(()=>({
         municipality: MUNICIPALITIES,
@@ -829,6 +997,24 @@
         const m = {}; data.forEach(d=>{ m[d.type]=(m[d.type]||0)+1; });
         return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
       }, [data]);
+
+      // Accreditation-by-year statistics: how many establishments were accredited during
+      // each year, based on each establishment's accreditation history (accredHistory), not
+      // just its current status. The year comes from each history entry's validity date; an
+      // establishment counts once per distinct year in its history.
+      const accredYearStats = useMemo(()=>{
+        const counts = {};
+        data.forEach(d=>{
+          if(statMunicipality && d.municipality!==statMunicipality) return;
+          const years = new Set();
+          getAccredHistory(d).forEach(h=>{
+            const y = accredHistoryYear(h);
+            if(y) years.add(y);
+          });
+          years.forEach(y=>{ counts[y] = (counts[y]||0) + 1; });
+        });
+        return Object.entries(counts).map(([year,count])=>({year,count})).sort((a,b)=>a.year.localeCompare(b.year));
+      }, [data, statMunicipality]);
 
       const save = (f) => {
         if(modal.mode==="edit"){
@@ -877,6 +1063,35 @@
                 <div className="panel-title">Per Type</div>
                 <BarList data={byType} color="#C08A2E" />
               </div>
+              <div className="panel span-2">
+                <div className="panel-title" style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8}}>
+                  <span>Accreditation History by Year</span>
+                  <div style={{minWidth:200}}>
+                    <select value={statMunicipality} onChange={(e)=>setStatMunicipality(e.target.value)}>
+                      <option value="">All Municipalities</option>
+                      {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{fontSize:12, color:"var(--subtext)", marginBottom:10}}>
+                  How many establishments were accredited during each year, based on each establishment's recorded accreditation history (an establishment counts once per year it was accredited).
+                </div>
+                {accredYearStats.length===0 ? (
+                  <div style={{fontSize:13, color:"var(--subtext)"}}>No accreditation history recorded yet.</div>
+                ) : (<React.Fragment>
+                  <BarList data={accredYearStats.map(s=>({name:s.year, count:s.count}))} color="#2B7A57" />
+                  <div className="table-wrap" style={{marginTop:14}}>
+                    <table style={{minWidth:"auto"}}>
+                      <thead><tr><th>Accreditation Year</th><th>Number of Accredited Establishments</th></tr></thead>
+                      <tbody>
+                        {accredYearStats.map((s,i)=>(
+                          <tr key={s.year} className={i%2?"odd":""}><td>{s.year}</td><td>{s.count}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </React.Fragment>)}
+              </div>
             </div>
           </div>
         ) : (
@@ -905,6 +1120,11 @@
                       <td>
                         <Pill tone={accredState==="Accredited"?"teal":accredState==="Expired"?"danger":"gold"}>{accredState}</Pill>
                         {d.accredValidity && <div className="cell-sub">{accredState==="Expired" ? "Expired on " : "Valid until "}{formatDateDisplay(d.accredValidity)}</div>}
+                        {getAccredHistory(d).length>0 && (
+                          <div className="cell-sub">History: {getAccredHistory(d).map((h,idx)=>
+                            (h.number ? h.number+" " : "") + "(" + (h.validity ? formatDateDisplay(h.validity) : "no date") + ")"
+                          ).join(", ")}</div>
+                        )}
                       </td>
                       <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
                       <td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
@@ -926,7 +1146,7 @@
 
         {modal && (
           <Modal title={modal.mode==="edit" ? "Edit Establishment" : "Add Establishment"} onClose={()=>setModal(null)}>
-            <EstablishmentForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
+            <EstablishmentForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} existingData={data} />
           </Modal>
         )}
         {toDelete && (
@@ -1175,7 +1395,7 @@
         loadInventoryFromCloud().then(data => {
           if(cancelled) return;
           if(data){
-            setEstablishments(Array.isArray(data.establishments) ? data.establishments : []);
+            setEstablishments((Array.isArray(data.establishments) ? data.establishments : []).map(d => ({...d, accredHistory: getAccredHistory(d)})));
             setAttractions(Array.isArray(data.attractions) ? data.attractions : []);
             if(data.updatedAt) setLastSaved(data.updatedAt);
           }
