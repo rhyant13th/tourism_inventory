@@ -139,6 +139,18 @@
     .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
     .icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; }
+
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+    .actions-cell { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .view-readonly-banner { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--teal); background: var(--teal-soft); border-radius: 8px; padding: 9px 12px; margin-bottom: 16px; }
+    .view-grid { display: grid; grid-template-columns: 1fr; gap: 2px 20px; }
+    @media(min-width:760px){ .view-grid { grid-template-columns: 1fr 1fr; } }
+    .view-field { padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .view-field-label { font-size: 11px; font-weight: 700; color: var(--subtext); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .02em; }
+    .view-field-value { font-size: 14px; color: var(--text); word-break: break-word; }
+    .warning-box { background: var(--gold-soft); border: 1px solid var(--gold); border-radius: 10px; padding: 16px; }
+    .change-summary-item { padding: 8px 12px; }
+    .change-summary-item + .change-summary-item { border-top: 1px solid var(--border); }
   </style>
 </head>
 <body>
@@ -278,6 +290,53 @@
           validity: excelValueToISODate((parts[3]||"").trim()),
         };
       }));
+    }
+
+    const ESTAB_FIELD_LABELS = {
+      name: "Name of Establishment",
+      proprietor: "Proprietor / Owner",
+      municipality: "Municipality",
+      classification: "Classification",
+      type: "Type",
+      address: "Address",
+      contact: "Contact Number",
+      email: "Email Address",
+      rooms: "Number of Rooms",
+      maleEmployees: "Male Employees",
+      femaleEmployees: "Female Employees",
+      remarks: "Remarks",
+      year: "Year Established / Registered",
+      accredStatus: "Status of Accreditation",
+      accredType: "Accreditation Type",
+      accredNumber: "Accreditation Number",
+      accredValidity: "Accreditation Validity",
+      accredHistory: "Accreditation History",
+      status: "Status of Establishment",
+      statusOthers: "Status Details (Others)",
+      tourlista: "Registered on TourLISTA",
+    };
+    function formatEstabFieldValue(key, val){
+      if(key==="accredHistory"){
+        const list = normalizeAccredHistory(val);
+        if(list.length===0) return "None";
+        return list.map(h=>accredEntryLabel(h)).join("; ");
+      }
+      if(key==="accredValidity") return val ? formatDateDisplay(val) : "—";
+      if(val===undefined || val===null || val==="") return "—";
+      return String(val);
+    }
+    function diffEstablishment(before, after){
+      const b = before || {};
+      const a = after || {};
+      const changes = [];
+      Object.keys(ESTAB_FIELD_LABELS).forEach(k=>{
+        const bv = k==="accredHistory" ? accredHistoryToText(b[k]) : String(b[k]==null?"":b[k]);
+        const av = k==="accredHistory" ? accredHistoryToText(a[k]) : String(a[k]==null?"":a[k]);
+        if(bv !== av){
+          changes.push({ key:k, label: ESTAB_FIELD_LABELS[k], from: formatEstabFieldValue(k, b[k]), to: formatEstabFieldValue(k, a[k]) });
+        }
+      });
+      return changes;
     }
 
     function normalizeForCompare(s){
@@ -642,6 +701,7 @@
       pin: "M12 21s7-6.4 7-11.5A7 7 0 0 0 5 9.5C5 14.6 12 21 12 21ZM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
       download: "M12 3v12M7 10l5 5 5-5M4 21h16",
       upload: "M12 21V9M7 14l5-5 5 5M4 3h16",
+      eye: "M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
     };
 
     function Field({label, required, children}){
@@ -679,6 +739,24 @@
             <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
           </div>
         </div>
+      </div>);
+    }
+    function WarningDialog({text, onStay, onDiscard}){
+      return (<div className="modal-overlay" style={{alignItems:"center", zIndex:60}}>
+        <div className="confirm-box">
+          <p style={{fontSize:14,margin:0}}>{text}</p>
+          <div className="confirm-actions">
+            <button className="btn btn-primary" onClick={onStay}>Stay and Continue Editing</button>
+            <button className="btn btn-danger" onClick={onDiscard}>Discard Changes</button>
+          </div>
+        </div>
+      </div>);
+    }
+    function ViewField({label, value}){
+      const display = (value===undefined || value===null || value==="") ? "—" : value;
+      return (<div className="view-field">
+        <div className="view-field-label">{label}</div>
+        <div className="view-field-value">{display}</div>
       </div>);
     }
 
@@ -726,9 +804,18 @@
       tourlista: "No"
     };
 
-    function EstablishmentForm({initial, onCancel, onSave, existingData}){
+    function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDirtyChange}){
       const [f, setF] = useState(() => initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment);
       const [dupeWarning, setDupeWarning] = useState(null);
+      const [confirmSave, setConfirmSave] = useState(null);
+      const initialSnapshotRef = useRef(initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment);
+
+      useEffect(() => {
+        if(typeof onDirtyChange !== "function") return;
+        const baseline = initialSnapshotRef.current;
+        const isDirty = diffEstablishment(baseline, f).length > 0;
+        onDirtyChange(isDirty);
+      }, [f]);
       
       const set = (k) => (e) => {
         const v = e && e.target ? e.target.value : e;
@@ -768,6 +855,20 @@
         });
       };
       const typeOptions = f.classification==="Primary Enterprises" ? PRIMARY_TYPES : f.classification==="Secondary Enterprises" ? SECONDARY_TYPES : [];
+
+      const finalizeSave = (cleanedForm) => {
+        if(mode === "edit"){
+          const changes = diffEstablishment(initialSnapshotRef.current, cleanedForm);
+          if(changes.length === 0){
+            onSave(cleanedForm);
+            return;
+          }
+          setConfirmSave({ changes, formToSave: cleanedForm });
+          return;
+        }
+        onSave(cleanedForm);
+      };
+
       const submit = () => {
         if(!f.municipality || !f.name || !f.classification || !f.type){
           alert("Please complete municipality, name, classification, and type.");
@@ -780,12 +881,35 @@
           setDupeWarning(dupes);
           return;
         }
-        onSave(cleanedForm);
+        finalizeSave(cleanedForm);
       };
       const confirmSaveAnyway = () => {
         setDupeWarning(null);
-        onSave(f);
+        finalizeSave({...f, accredHistory: normalizeAccredHistory(f.accredHistory)});
       };
+
+      if(confirmSave){
+        return (<div>
+          <div className="warning-box">
+            <div style={{fontWeight:700, color:"var(--navy)", fontSize:15, marginBottom:6}}>Confirm Changes</div>
+            <div style={{fontSize:13, color:"var(--text)", marginBottom:12}}>
+              You are about to update this establishment. Do you want to proceed with saving these changes?
+            </div>
+            <div style={{background:"#fff", border:"1px solid var(--border)", borderRadius:8, overflow:"hidden"}}>
+              {confirmSave.changes.map((c,idx)=>(
+                <div className="change-summary-item" key={c.key || idx}>
+                  <div style={{fontWeight:600, fontSize:13, color:"var(--navy)"}}>{c.label}</div>
+                  <div style={{fontSize:12, color:"var(--subtext)"}}>{c.from} → {c.to}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="form-actions">
+            <button className="btn" onClick={()=>setConfirmSave(null)}>Cancel / Go Back</button>
+            <button className="btn btn-primary" onClick={()=>onSave(confirmSave.formToSave)}>Confirm / Save Changes</button>
+          </div>
+        </div>);
+      }
 
       if(dupeWarning){
         return (<div>
@@ -933,7 +1057,75 @@
         </div>
         <div className="form-actions">
           <button className="btn" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary" onClick={submit}>Save Establishment</button>
+          <button className="btn btn-primary" onClick={submit}>{mode==="edit" ? "Save Changes" : "Save Establishment"}</button>
+        </div>
+      </div>);
+    }
+
+    function EstablishmentViewInfo({item, onEdit, onClose}){
+      if(!item) return null;
+      const accredState = getAccredState(item);
+      const history = sortAccredHistoryDesc(getAccredHistory(item));
+      return (<div>
+        <div className="view-readonly-banner"><Icon d={ICONS.eye} size={14} color="#1C6B6E" /> Read-only view — no changes can be made here. Use Edit to modify this record.</div>
+        <div className="view-grid">
+          <ViewField label="Name of Establishment" value={item.name} />
+          <ViewField label="Municipality" value={item.municipality} />
+          <ViewField label="Proprietor / Owner" value={item.proprietor} />
+          <ViewField label="Classification" value={item.classification} />
+          <ViewField label="Type" value={item.type} />
+          <ViewField label="Address" value={item.address} />
+          <ViewField label="Contact Number" value={item.contact} />
+          <ViewField label="Email Address" value={item.email} />
+          <ViewField label="Number of Rooms" value={item.rooms} />
+          <ViewField label="Male Employees" value={item.maleEmployees} />
+          <ViewField label="Female Employees" value={item.femaleEmployees} />
+          <ViewField label="Total Employees" value={totalEmployees(item)} />
+          <ViewField label="Remarks" value={item.remarks} />
+          <ViewField label="Year Established / Registered" value={item.year} />
+          <ViewField label="Status of Accreditation" value={item.accredStatus} />
+          <ViewField label="Accreditation Status (Computed)" value={accredState} />
+          {item.accredStatus==="Accredited" && (<React.Fragment>
+            <ViewField label="Accreditation Type" value={item.accredType} />
+            <ViewField label="Accreditation Number" value={item.accredNumber} />
+            <ViewField label="Accreditation Validity" value={item.accredValidity ? formatDateDisplay(item.accredValidity) : ""} />
+          </React.Fragment>)}
+          <ViewField label="Status of Establishment" value={item.status==="Others" && item.statusOthers ? item.statusOthers : item.status} />
+          <ViewField label="Registered on TourLISTA?" value={item.tourlista||"No"} />
+        </div>
+
+        <div style={{marginTop:14}}>
+          <div className="view-field-label" style={{marginBottom:6}}>Accredited Years</div>
+          <div style={{display:"flex", flexWrap:"wrap", gap:6, marginBottom:16}}>
+            {establishmentAccreditedYears(item).length===0 ? (
+              <span style={{fontSize:12, color:"var(--subtext)"}}>No accreditation records on file.</span>
+            ) : establishmentAccreditedYears(item).map(y=><span key={y} className="pill pill-teal">{y}</span>)}
+          </div>
+          <div className="view-field-label" style={{marginBottom:6}}>Accreditation History</div>
+          {history.length===0 ? (
+            <div style={{fontSize:12, color:"var(--subtext)"}}>No accreditation history recorded.</div>
+          ) : (
+            <div className="table-wrap">
+              <table style={{minWidth:"auto"}}>
+                <thead><tr><th>Type</th><th>Number</th><th>Accreditation Date</th><th>Valid Until</th></tr></thead>
+                <tbody>
+                  {history.map((h,idx)=>(
+                    <tr key={idx} className={idx%2?"odd":""}>
+                      <td>{h.type||"—"}</td>
+                      <td>{h.number||"—"}</td>
+                      <td>{h.accredDate?formatDateDisplay(h.accredDate):"—"}</td>
+                      <td>{h.validity?formatDateDisplay(h.validity):"—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="form-actions">
+          <button className="btn" onClick={onClose}>Close</button>
+          <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit This Establishment</button>
         </div>
       </div>);
     }
@@ -1038,6 +1230,8 @@
       const [toDelete, setToDelete] = useState(null);
       const [statMunicipality, setStatMunicipality] = useState("");
       const [statYear, setStatYear] = useState("");
+      const [formDirty, setFormDirty] = useState(false);
+      const [showLeaveWarning, setShowLeaveWarning] = useState(false);
 
       const options = useMemo(()=>({
         municipality: MUNICIPALITIES,
@@ -1095,6 +1289,7 @@
         } else {
           setData(prev=>[...prev, {...f, id:"E-"+Date.now()}]);
         }
+        setFormDirty(false);
         setModal(null);
       };
 
@@ -1103,13 +1298,29 @@
         setToDelete(null);
       };
 
+      // Guarded close: if the edit/add form has unsaved changes, ask before discarding.
+      const requestCloseModal = () => {
+        if(modal && modal.mode !== "view" && formDirty){
+          setShowLeaveWarning(true);
+        } else {
+          setModal(null);
+          setFormDirty(false);
+        }
+      };
+      const stayEditing = () => setShowLeaveWarning(false);
+      const discardAndClose = () => {
+        setShowLeaveWarning(false);
+        setFormDirty(false);
+        setModal(null);
+      };
+
       return (<div>
         <div className="toolbar-row">
           <div className="view-toggle">
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Establishment</button>
+          <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Establishment</button>
         </div>
 
         {view==="dashboard" ? (
@@ -1243,9 +1454,14 @@
                       <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
                       <td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
                       <td>
-                        <div style={{display:"flex",gap:10}}>
-                          <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
-                          <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
+                        <div className="actions-cell">
+                          <button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFormDirty(false); setModal({mode:"view", item:d}); }}>
+                            <Icon d={ICONS.eye} size={13} color="#1C6B6E" /> View Info
+                          </button>
+                          <button className="btn btn-primary btn-sm" onClick={()=>{ setFormDirty(false); setModal({mode:"edit", item:d}); }}>
+                            <Icon d={ICONS.edit} size={13} color="#fff" /> Edit
+                          </button>
+                          <button className="btn-ghost" onClick={()=>setToDelete(d)} title="Delete"><Icon d={ICONS.trash} color="#A8442D" /></button>
                         </div>
                       </td>
                     </tr>
@@ -1258,10 +1474,34 @@
           </div>
         )}
 
-        {modal && (
-          <Modal title={modal.mode==="edit" ? "Edit Establishment" : "Add Establishment"} onClose={()=>setModal(null)}>
-            <EstablishmentForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} existingData={data} />
+        {modal && modal.mode==="view" && (
+          <Modal title="Establishment Information" onClose={()=>setModal(null)}>
+            <EstablishmentViewInfo
+              item={modal.item}
+              onClose={()=>setModal(null)}
+              onEdit={()=>{ setFormDirty(false); setModal({mode:"edit", item:modal.item}); }}
+            />
           </Modal>
+        )}
+        {modal && (modal.mode==="edit" || modal.mode==="add") && (
+          <Modal title={modal.mode==="edit" ? "Edit Establishment" : "Add Establishment"} onClose={requestCloseModal}>
+            <EstablishmentForm
+              key={modal.mode + (modal.item ? modal.item.id : "new")}
+              mode={modal.mode}
+              initial={modal.item}
+              onCancel={requestCloseModal}
+              onSave={save}
+              onDirtyChange={setFormDirty}
+              existingData={data}
+            />
+          </Modal>
+        )}
+        {showLeaveWarning && (
+          <WarningDialog
+            text="You have unsaved changes. Are you sure you want to leave without saving?"
+            onStay={stayEditing}
+            onDiscard={discardAndClose}
+          />
         )}
         {toDelete && (
           <ConfirmDialog text={'Delete "'+toDelete.name+'"? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={handleDelete} />
