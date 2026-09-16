@@ -179,7 +179,15 @@
     const CLASSIFICATIONS = ["Primary Enterprises","Secondary Enterprises"];
     const MUNICIPALITIES = ["Abra de Ilog","Calintaan","Looc","Lubang","Magsaysay","Mamburao","Paluan","Rizal","Sablayan","San Jose","Sta. Cruz"];
     const ACCRED_STATUSES = ["Accredited","Not Accredited"];
-    const ACCRED_TYPES = ["Regular","Basic"];
+    // "Level of Accreditation": Primary Enterprises get Regular/Basic; Secondary Enterprises
+    // have no PAS level at all, so they use "N/A-No PAS Level" instead (validity is 1 year,
+    // same as Basic, and the covered/counted years follow the same validity-based rule).
+    const PRIMARY_ACCRED_LEVELS = ["Regular","Basic"];
+    const SECONDARY_ACCRED_LEVELS = ["N/A-No PAS Level"];
+    const ACCRED_LEVELS = [...PRIMARY_ACCRED_LEVELS, ...SECONDARY_ACCRED_LEVELS];
+    function accredLevelsForClassification(classification){
+      return classification==="Secondary Enterprises" ? SECONDARY_ACCRED_LEVELS : PRIMARY_ACCRED_LEVELS;
+    }
     const ESTAB_STATUSES = ["Active","Not Active","Others"];
     const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
     const TOURLISTA_OPTIONS = ["Yes","No"];
@@ -221,7 +229,8 @@
         return years;
       }
       // Coverage starts N years before the validity expiry date and runs to the validity date
-      // (Regular: N=2, Basic: N=1). Since the period doesn't align to Jan 1–Dec 31, it touches
+      // (Regular: N=2; Basic and N/A-No PAS Level: N=1). Since the period doesn't align to
+      // Jan 1–Dec 31, it touches
       // N+1 calendar years — e.g. Regular expiring Oct 31, 2026 covers 2024, 2025, 2026.
       const durationYears = (entry && entry.type==="Regular") ? 2 : 1;
       for(let y = endY - durationYears; y <= endY; y++) years.push(String(y));
@@ -326,7 +335,7 @@
       return normalizeAccredHistory(s.split(";").map(chunk=>{
         const parts = chunk.split("|");
         return {
-          type: matchFromList((parts[0]||"").trim(), ACCRED_TYPES) || (parts[0]||"").trim(),
+          type: matchFromList((parts[0]||"").trim(), ACCRED_LEVELS) || (parts[0]||"").trim(),
           number: (parts[1]||"").trim(),
           accredDate: excelValueToISODate((parts[2]||"").trim()),
           validity: excelValueToISODate((parts[3]||"").trim()),
@@ -531,7 +540,7 @@
       "No.","Name of Establishment","Proprietor / Owner","Municipality","Classification","Type",
       "Address","Contact Number","Email Address","Number of Rooms","Male Employees","Female Employees",
       "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
-      "Accreditation Status (Computed)","Accreditation Type","Accreditation Number","Accreditation Validity",
+      "Accreditation Status (Computed)","Level of Accreditation","Accreditation Number","Accreditation Validity",
       "Accreditation History (Type|Number|AccredDate|Validity; ...)","Accredited Years (Computed)",
       "Registered on TourLISTA","Status of Establishment",
     ];
@@ -652,12 +661,13 @@
         
         let accredHistory = parseAccredHistoryText(row["Accreditation History (Type|Number|AccredDate|Validity; ...)"]);
         const accredValidity = excelValueToISODate(row["Accreditation Validity"]);
-        const accredType = matchFromList(row["Accreditation Type"], ACCRED_TYPES);
+        const accredType = matchFromList(row["Level of Accreditation"], ACCRED_LEVELS);
         const accredNumber = String(row["Accreditation Number"]||"").trim();
 
         // Automatically populate history if text column was blank but current validity exists
         if(accredHistory.length === 0 && rawAccred === "Accredited" && accredValidity){
-          accredHistory = [{ type: accredType || "Regular", number: accredNumber, accredDate: "", validity: accredValidity }];
+          const defaultLevel = classification==="Secondary Enterprises" ? "N/A-No PAS Level" : "Regular";
+          accredHistory = [{ type: accredType || defaultLevel, number: accredNumber, accredDate: "", validity: accredValidity }];
         }
 
         establishments.push({
@@ -1019,22 +1029,22 @@
                 )}
               </div>
               <div style={{fontSize:11, color:"var(--subtext)", marginTop:6}}>
-                Automatically calculated from the accreditation periods below — Regular covers 2 calendar years, Basic covers 1, based on the actual dates on file.
+                Automatically calculated from the accreditation periods below — Regular covers 2 calendar years; Basic and N/A-No PAS Level (used for Secondary Enterprises) cover 1 year each, based on the actual dates on file.
               </div>
             </Field>
           </div>
           <div style={{gridColumn:"1 / -1"}}>
             <Field label="Accreditation History">
               <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
-                Record every past accreditation period — type, number, accreditation date, and validity date. All records are kept; the latest appears first.
+                Record every past accreditation period — level, number, accreditation date, and validity date. All records are kept; the latest appears first.
               </div>
               {sortedAccredHistoryForForm(f.accredHistory).map(({h, idx})=>(
                 <div key={idx} style={{display:"flex", gap:8, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap"}}>
                   <div style={{flex:"1 1 130px"}}>
-                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Type</div>
+                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Level of Accreditation</div>
                     <select value={h.type} onChange={(e)=>updateHistoryEntry(idx,"type",e.target.value)}>
-                      <option value="">Select type</option>
-                      {ACCRED_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                      <option value="">Select level</option>
+                      {accredLevelsForClassification(f.classification).map(t=><option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div style={{flex:"1 1 150px"}}>
@@ -1110,7 +1120,7 @@
           <ViewField label="Year Established / Registered" value={item.year} />
           <ViewField label="Status of Accreditation" value={accredState} />
           {latestAccred && (<React.Fragment>
-            <ViewField label="Accreditation Type" value={latestAccred.type} />
+            <ViewField label="Level of Accreditation" value={latestAccred.type} />
             <ViewField label="Accreditation Number" value={latestAccred.number} />
             <ViewField label="Accreditation Validity" value={latestAccred.validity ? formatDateDisplay(latestAccred.validity) : ""} />
           </React.Fragment>)}
