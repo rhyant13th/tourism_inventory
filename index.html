@@ -272,17 +272,25 @@
       return latest.validity < todayISO() ? "Expired" : "Accredited";
     }
 
+    // For an establishment counted as accredited in `year`, returns the accreditation entry
+    // "in force" for that year — the one whose coverage includes it, picking the latest by
+    // validity if there's more than one (e.g. a renewal within the same year).
+    function accredEntryForYear(d, year){
+      const entries = getAccredHistory(d).filter(h => accredEntryCoverageYears(h).includes(year));
+      if(entries.length===0) return null;
+      const dated = entries.filter(h=>h.validity);
+      return (dated.length ? dated : entries).slice()
+        .sort((a,b)=> (a.validity||"").localeCompare(b.validity||"")).pop();
+    }
+
     // For an establishment counted as accredited in `year` (per the calendar-year coverage
     // rule), tells whether that accreditation is still currently valid as of today or has
     // already lapsed. Picks the accreditation entry whose coverage includes `year` with the
     // latest validity date (the one "in force" for that year), then compares it to today.
     function establishmentYearRealtimeStatus(d, year){
-      const entries = getAccredHistory(d).filter(h => accredEntryCoverageYears(h).includes(year));
-      if(entries.length===0) return null;
-      const dated = entries.filter(h=>h.validity);
-      const latest = (dated.length ? dated : entries).slice()
-        .sort((a,b)=> (a.validity||"").localeCompare(b.validity||"")).pop();
-      if(!latest || !latest.validity) return "Accredited";
+      const latest = accredEntryForYear(d, year);
+      if(!latest) return null;
+      if(!latest.validity) return "Accredited";
       return latest.validity < todayISO() ? "Expired" : "Accredited";
     }
 
@@ -1310,6 +1318,14 @@
         return { total: accreditedInStatYear.length, valid, expired };
       }, [accreditedInStatYear, statYear]);
 
+      // How many accredited-for-that-year establishments fall under each type of enterprise
+      // (e.g. Mabuhay Accommodation, Restaurant, Farm Tourism Camp).
+      const statYearByType = useMemo(()=>{
+        const m = {};
+        accreditedInStatYear.forEach(d=>{ m[d.type] = (m[d.type]||0) + 1; });
+        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+      }, [accreditedInStatYear]);
+
       const save = (f) => {
         if(modal.mode==="edit"){
           setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
@@ -1420,14 +1436,21 @@
                       <StatCard label={"Still Valid (as of today)"} value={statYearBreakdown.valid} />
                       <StatCard label={"Expired (as of today)"} value={statYearBreakdown.expired} />
                     </div>
+                    <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Accredited by Type of Enterprise ({statYear})</div>
+                    <BarList data={statYearByType} color="#C08A2E" />
+                    <div style={{fontWeight:700, fontSize:13, margin:"18px 0 8px"}}>Establishments Accredited in {statYear}</div>
                     <div className="table-wrap">
                       <table style={{minWidth:"auto"}}>
-                        <thead><tr><th>Establishment</th><th>Municipality</th><th>Status (as of today)</th><th>Accredited Years</th></tr></thead>
+                        <thead><tr><th>Establishment</th><th>Municipality</th><th>Type of Enterprise</th><th>Accreditation Level</th><th>Status (as of today)</th><th>Accredited Years</th></tr></thead>
                         <tbody>
-                          {accreditedInStatYear.map((d,i)=>(
+                          {accreditedInStatYear.map((d,i)=>{
+                            const yearEntry = accredEntryForYear(d, statYear);
+                            return (
                             <tr key={d.id} className={i%2?"odd":""}>
                               <td>{d.name}</td>
                               <td>{d.municipality}</td>
+                              <td>{d.type}</td>
+                              <td>{(yearEntry && yearEntry.type) || "—"}</td>
                               <td>
                                 <span className={"pill " + (establishmentYearRealtimeStatus(d, statYear)==="Expired" ? "pill-danger" : "pill-teal")}>
                                   {establishmentYearRealtimeStatus(d, statYear)}
@@ -1435,7 +1458,7 @@
                               </td>
                               <td>{establishmentAccreditedYears(d).join(", ")}</td>
                             </tr>
-                          ))}
+                          );})}
                         </tbody>
                       </table>
                     </div>
