@@ -187,11 +187,6 @@
     const DECLARATION_STATUSES = ["Nationally Declared","Locally Declared","Registered","Unregistered/For Validation"];
 
     function todayISO(){ return new Date().toISOString().slice(0,10); }
-    function getAccredState(d){
-      if(d.accredStatus !== "Accredited") return "Not Accredited";
-      if(d.accredValidity && d.accredValidity < todayISO()) return "Expired";
-      return "Accredited";
-    }
     function totalEmployees(d){
       return (Number(d.maleEmployees)||0) + (Number(d.femaleEmployees)||0);
     }
@@ -253,6 +248,28 @@
         }]);
       }
       return [];
+    }
+
+    // The accreditation entry currently "in force" — the one with the latest validity date
+    // on file. This is the reference used to determine current status, and to display
+    // type/number/validity wherever the old top-level fields used to be shown.
+    function latestAccredEntry(d){
+      const list = getAccredHistory(d);
+      if(list.length===0) return null;
+      const dated = list.filter(h=>h.validity);
+      return (dated.length ? dated : list).slice()
+        .sort((a,b)=> (a.validity||"").localeCompare(b.validity||"")).pop();
+    }
+
+    // Accreditation status is now entirely derived from the Accreditation History entries —
+    // there is no separate manual "Status of Accreditation" field on the establishment.
+    // No periods on file -> Not Accredited. Latest period's validity in the future -> Accredited.
+    // Latest period's validity already passed -> Expired.
+    function getAccredState(d){
+      const latest = latestAccredEntry(d);
+      if(!latest) return "Not Accredited";
+      if(!latest.validity) return "Accredited";
+      return latest.validity < todayISO() ? "Expired" : "Accredited";
     }
 
     // For an establishment counted as accredited in `year` (per the calendar-year coverage
@@ -323,10 +340,6 @@
       femaleEmployees: "Female Employees",
       remarks: "Remarks",
       year: "Year Established / Registered",
-      accredStatus: "Status of Accreditation",
-      accredType: "Accreditation Type",
-      accredNumber: "Accreditation Number",
-      accredValidity: "Accreditation Validity",
       accredHistory: "Accreditation History",
       status: "Status of Establishment",
       statusOthers: "Status Details (Others)",
@@ -521,15 +534,18 @@
     ];
 
     function buildEstabRows(list){
-      return list.map((d,i)=>[
-        i+1, d.name||"", d.proprietor||"", d.municipality||"", d.classification||"", d.type||"",
-        d.address||"", d.contact||"", d.email||"", d.rooms||"", d.maleEmployees||"", d.femaleEmployees||"",
-        totalEmployees(d), d.remarks||"", d.year||"", d.accredStatus||"", getAccredState(d),
-        d.accredType||"", d.accredNumber||"", isoToDateObj(d.accredValidity), accredHistoryToText(getAccredHistory(d)),
-        establishmentAccreditedYears(d).join(", "),
-        d.tourlista||"No",
-        (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
-      ]);
+      return list.map((d,i)=>{
+        const latest = latestAccredEntry(d);
+        return [
+          i+1, d.name||"", d.proprietor||"", d.municipality||"", d.classification||"", d.type||"",
+          d.address||"", d.contact||"", d.email||"", d.rooms||"", d.maleEmployees||"", d.femaleEmployees||"",
+          totalEmployees(d), d.remarks||"", d.year||"", getAccredState(d), getAccredState(d),
+          (latest && latest.type)||"", (latest && latest.number)||"", isoToDateObj(latest && latest.validity), accredHistoryToText(getAccredHistory(d)),
+          establishmentAccreditedYears(d).join(", "),
+          d.tourlista||"No",
+          (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
+        ];
+      });
     }
     function buildAttrRows(list){
       return list.map((d,i)=>[
@@ -816,8 +832,8 @@
     const emptyEstablishment = {
       name: "", proprietor: "", email: "", municipality: "", classification: "",
       type: "", address: "", contact: "", rooms: "", maleEmployees: "",
-      femaleEmployees: "", remarks: "", accredStatus: "Not Accredited",
-      accredType: "", accredNumber: "", accredValidity: "", accredHistory: [], status: "Active", statusOthers: "", year: "",
+      femaleEmployees: "", remarks: "",
+      accredHistory: [], status: "Active", statusOthers: "", year: "",
       tourlista: "No"
     };
 
@@ -839,17 +855,7 @@
         setF(prev=>{
           const next = {...prev, [k]: v};
           if(k==="classification") next.type = "";
-          if(k==="accredStatus" && v==="Not Accredited"){ next.accredType=""; next.accredNumber=""; next.accredValidity=""; }
           if(k==="status" && v!=="Others") next.statusOthers = "";
-          
-          // UPDATED: Automatically sync active accreditation details into accredHistory array
-          if(["accredType", "accredNumber", "accredValidity", "accredStatus"].includes(k)){
-            if(next.accredStatus === "Accredited" && next.accredValidity){
-              const activeRecord = { type: next.accredType || "Regular", number: next.accredNumber || "", accredDate: "", validity: next.accredValidity };
-              const otherRecords = (next.accredHistory || []).filter(h => h.validity !== next.accredValidity);
-              next.accredHistory = normalizeAccredHistory([...otherRecords, activeRecord]);
-            }
-          }
           return next;
         });
       };
@@ -986,20 +992,13 @@
           <Field label="Remarks"><input type="text" value={f.remarks} onChange={set("remarks")} placeholder="Optional remarks" /></Field>
           <Field label="Year (Established / Registered)"><input type="text" value={f.year} onChange={set("year")} placeholder="e.g. 2021" /></Field>
           <Field label="Status of Accreditation">
-            <select value={f.accredStatus} onChange={set("accredStatus")}>
-              {ACCRED_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+            <div style={{display:"flex", alignItems:"center", gap:8, height:36}}>
+              <span className={"pill " + (getAccredState(f)==="Accredited" ? "pill-teal" : getAccredState(f)==="Expired" ? "pill-danger" : "pill-grey")}>
+                {getAccredState(f)}
+              </span>
+              <span style={{fontSize:11, color:"var(--subtext)"}}>Based on the Accreditation History below</span>
+            </div>
           </Field>
-          {f.accredStatus==="Accredited" && (<React.Fragment>
-            <Field label="Accreditation Type" required>
-              <select value={f.accredType} onChange={set("accredType")}>
-                <option value="">Select type</option>
-                {ACCRED_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-              </select>
-            </Field>
-            <Field label="Accreditation Number" required><input type="text" value={f.accredNumber} onChange={set("accredNumber")} placeholder="e.g. ACC-2025-0001" /></Field>
-            <Field label="Validity" required><input type="date" value={f.accredValidity} onChange={set("accredValidity")} /></Field>
-          </React.Fragment>)}
           <div style={{gridColumn:"1 / -1"}}>
             <Field label="Accredited Years">
               <div style={{display:"flex", flexWrap:"wrap", gap:6}}>
@@ -1082,6 +1081,7 @@
     function EstablishmentViewInfo({item, onEdit, onClose}){
       if(!item) return null;
       const accredState = getAccredState(item);
+      const latestAccred = latestAccredEntry(item);
       const history = sortAccredHistoryDesc(getAccredHistory(item));
       return (<div>
         <div className="view-readonly-banner"><Icon d={ICONS.eye} size={14} color="#1C6B6E" /> Read-only view — no changes can be made here. Use Edit to modify this record.</div>
@@ -1100,12 +1100,11 @@
           <ViewField label="Total Employees" value={totalEmployees(item)} />
           <ViewField label="Remarks" value={item.remarks} />
           <ViewField label="Year Established / Registered" value={item.year} />
-          <ViewField label="Status of Accreditation" value={item.accredStatus} />
-          <ViewField label="Accreditation Status (Computed)" value={accredState} />
-          {item.accredStatus==="Accredited" && (<React.Fragment>
-            <ViewField label="Accreditation Type" value={item.accredType} />
-            <ViewField label="Accreditation Number" value={item.accredNumber} />
-            <ViewField label="Accreditation Validity" value={item.accredValidity ? formatDateDisplay(item.accredValidity) : ""} />
+          <ViewField label="Status of Accreditation" value={accredState} />
+          {latestAccred && (<React.Fragment>
+            <ViewField label="Accreditation Type" value={latestAccred.type} />
+            <ViewField label="Accreditation Number" value={latestAccred.number} />
+            <ViewField label="Accreditation Validity" value={latestAccred.validity ? formatDateDisplay(latestAccred.validity) : ""} />
           </React.Fragment>)}
           <ViewField label="Status of Establishment" value={item.status==="Others" && item.statusOthers ? item.statusOthers : item.status} />
           <ViewField label="Registered on TourLISTA?" value={item.tourlista||"No"} />
@@ -1462,6 +1461,7 @@
                 <tbody>
                   {filtered.map((d,i)=>{
                     const accredState = getAccredState(d);
+                    const latestAccred = latestAccredEntry(d);
                     return (
                     <tr key={d.id} className={i%2?"odd":""}>
                       <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
@@ -1470,8 +1470,8 @@
                       <td>{d.type}</td>
                       <td>
                         <Pill tone={accredState==="Accredited"?"teal":accredState==="Expired"?"danger":"gold"}>{accredState}</Pill>
-                        {accredState==="Accredited" && d.accredType && <div className="cell-sub">{d.accredType}</div>}
-                        {d.accredValidity && <div className="cell-sub">{accredState==="Expired" ? "Expired on " : "Valid until "}{formatDateDisplay(d.accredValidity)}</div>}
+                        {accredState==="Accredited" && latestAccred && latestAccred.type && <div className="cell-sub">{latestAccred.type}</div>}
+                        {latestAccred && latestAccred.validity && <div className="cell-sub">{accredState==="Expired" ? "Expired on " : "Valid until "}{formatDateDisplay(latestAccred.validity)}</div>}
                         {establishmentAccreditedYears(d).length>0 && (
                           <div className="cell-sub">Accredited Years: {establishmentAccreditedYears(d).join(", ")}</div>
                         )}
