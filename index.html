@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tourism Establishment &amp; Attraction Inventory</title>
+  <title>Tourism Enterprise &amp; Attraction Inventory</title>
 
   <!-- External JS Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -344,7 +344,7 @@
     }
 
     const ESTAB_FIELD_LABELS = {
-      name: "Name of Establishment",
+      name: "Name of Enterprise",
       proprietor: "Proprietor / Owner",
       municipality: "Municipality",
       classification: "Classification",
@@ -358,7 +358,7 @@
       remarks: "Remarks",
       year: "Year Established / Registered",
       accredHistory: "Accreditation History",
-      status: "Status of Establishment",
+      status: "Status of Enterprise",
       statusOthers: "Status Details (Others)",
       tourlista: "Registered on TourLISTA",
     };
@@ -537,12 +537,12 @@
     });
 
     const ESTAB_HEADERS = [
-      "No.","Name of Establishment","Proprietor / Owner","Municipality","Classification","Type",
+      "No.","Name of Enterprise","Proprietor / Owner","Municipality","Classification","Type",
       "Address","Contact Number","Email Address","Number of Rooms","Male Employees","Female Employees",
       "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
       "Accreditation Status (Computed)","Level of Accreditation","Accreditation Number","Accreditation Validity",
       "Accreditation History (Type|Number|AccredDate|Validity; ...)","Accredited Years (Computed)",
-      "Registered on TourLISTA","Status of Establishment",
+      "Registered on TourLISTA","Status of Enterprise",
     ];
     const ATTR_HEADERS = [
       "No.","Municipality","Name of Attraction","Year Established","Status","Physical Condition",
@@ -577,11 +577,11 @@
 
       const infoRows = [
         ["PROVINCIAL TOURISM OFFICE"],
-        ["Tourism Establishment & Attraction Inventory — Submission File"],
+        ["Tourism Enterprise & Attraction Inventory — Submission File"],
         ["Generated: " + new Date().toLocaleString()],
         [""],
         ["Instructions"],
-        ["1. Do not rename, reorder, or delete the column headers on the 'Establishments' and 'Attractions' sheets."],
+        ["1. Do not rename, reorder, or delete the column headers on the 'Enterprises' and 'Attractions' sheets."],
         ["2. To add or correct records offline, edit the rows or add new rows below the existing data on each sheet."],
         ["3. Save this file, then use the 'Upload Encoded Excel' button in the app to bulk-import the rows."],
         ["4. This same file, once complete, can be submitted directly to the national agency."],
@@ -600,7 +600,7 @@
           if(cell && cell.t === 'd') cell.z = 'yyyy-mm-dd';
         }
       }
-      XLSX.utils.book_append_sheet(wb, wsEstab, "Establishments");
+      XLSX.utils.book_append_sheet(wb, wsEstab, "Enterprises");
 
       const wsAttr = XLSX.utils.aoa_to_sheet([ATTR_HEADERS, ...buildAttrRows(attractions)]);
       wsAttr['!cols'] = ATTR_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
@@ -639,15 +639,23 @@
         return obj;
       });
     }
+    // Tries each sheet name in order — lets us read older backups that still use the
+    // pre-rename "Establishments" tab, as well as current "Enterprises" backups.
+    function sheetToRowsAny(wb, sheetNames, canonicalHeaders){
+      for(const name of sheetNames){
+        if(wb.Sheets[name]) return sheetToRows(wb, name, canonicalHeaders);
+      }
+      return [];
+    }
 
     function parseImportedWorkbook(wb){
-      const estabRows = sheetToRows(wb, "Establishments", ESTAB_HEADERS);
+      const estabRows = sheetToRowsAny(wb, ["Enterprises","Establishments"], ESTAB_HEADERS);
       const attrRows = sheetToRows(wb, "Attractions", ATTR_HEADERS);
 
       const establishments = [];
       let estabSkipped = 0;
       estabRows.forEach(row => {
-        const name = String(row["Name of Establishment"]||"").trim();
+        const name = String(row["Name of Enterprise"]||"").trim();
         const municipality = matchFromList(row["Municipality"], MUNICIPALITIES);
         const classification = matchFromList(row["Classification"], CLASSIFICATIONS);
         const typeList = classification==="Primary Enterprises" ? PRIMARY_TYPES
@@ -655,7 +663,7 @@
           : [...PRIMARY_TYPES, ...SECONDARY_TYPES];
         const type = matchFromList(row["Type"], typeList);
         if(!name || !municipality || !classification || !type){ estabSkipped++; return; }
-        const rawStatus = matchFromList(row["Status of Establishment"], ESTAB_STATUSES) || "Active";
+        const rawStatus = matchFromList(row["Status of Enterprise"], ESTAB_STATUSES) || "Active";
         const status = ESTAB_STATUSES.includes(rawStatus) ? rawStatus : "Others";
         const rawAccred = matchFromList(row["Status of Accreditation"], ACCRED_STATUSES);
         
@@ -681,7 +689,7 @@
           accredNumber,
           accredValidity,
           accredHistory,
-          status, statusOthers: status==="Others" ? stripListPrefix(row["Status of Establishment"]) : "",
+          status, statusOthers: status==="Others" ? stripListPrefix(row["Status of Enterprise"]) : "",
           year: String(row["Year Established / Registered"]||"").trim(),
           tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
         });
@@ -854,12 +862,20 @@
       accredHistory: [], status: "Active", statusOthers: "", year: "",
       tourlista: "No"
     };
+    // Tour Guides don't have rooms, employees, or a proprietor in the usual sense — those
+    // fields are auto-filled with "N/A" and locked whenever the enterprise type is Tour Guides.
+    function applyTourGuideAutoFields(obj){
+      if(obj && obj.type === "Tour Guides"){
+        return {...obj, proprietor: "N/A", rooms: "N/A", maleEmployees: "N/A", femaleEmployees: "N/A"};
+      }
+      return obj;
+    }
 
     function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDirtyChange}){
-      const [f, setF] = useState(() => initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment);
+      const [f, setF] = useState(() => applyTourGuideAutoFields(initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment));
       const [dupeWarning, setDupeWarning] = useState(null);
       const [confirmSave, setConfirmSave] = useState(null);
-      const initialSnapshotRef = useRef(initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment);
+      const initialSnapshotRef = useRef(applyTourGuideAutoFields(initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment));
 
       useEffect(() => {
         if(typeof onDirtyChange !== "function") return;
@@ -874,7 +890,11 @@
           const next = {...prev, [k]: v};
           if(k==="classification") next.type = "";
           if(k==="status" && v!=="Others") next.statusOthers = "";
-          return next;
+          if(k==="type" && prev.type==="Tour Guides" && v!=="Tour Guides"){
+            // leaving Tour Guides — clear the auto-filled N/A so the fields are editable again
+            ["proprietor","rooms","maleEmployees","femaleEmployees"].forEach(key=>{ if(next[key]==="N/A") next[key]=""; });
+          }
+          return applyTourGuideAutoFields(next);
         });
       };
 
@@ -896,6 +916,7 @@
         });
       };
       const typeOptions = f.classification==="Primary Enterprises" ? PRIMARY_TYPES : f.classification==="Secondary Enterprises" ? SECONDARY_TYPES : [];
+      const isTourGuide = f.type === "Tour Guides";
 
       const finalizeSave = (cleanedForm) => {
         if(mode === "edit"){
@@ -915,7 +936,7 @@
           alert("Please complete municipality, name, classification, and type.");
           return;
         }
-        const cleanedForm = {...f, accredHistory: normalizeAccredHistory(f.accredHistory)};
+        const cleanedForm = applyTourGuideAutoFields({...f, accredHistory: normalizeAccredHistory(f.accredHistory)});
         const dupes = findPossibleDuplicates(cleanedForm.name, existingData, cleanedForm.id);
         if(dupes.length){
           setF(cleanedForm);
@@ -955,7 +976,7 @@
       if(dupeWarning){
         return (<div>
           <div style={{background:"var(--danger-soft)", border:"1px solid var(--danger)", borderRadius:10, padding:16}}>
-            <div style={{fontWeight:700, color:"var(--danger)", fontSize:15, marginBottom:6}}>Possible Duplicate Establishment</div>
+            <div style={{fontWeight:700, color:"var(--danger)", fontSize:15, marginBottom:6}}>Possible Duplicate Enterprise</div>
             <div style={{fontSize:13, color:"var(--text)", marginBottom:12}}>
               An establishment with the same or similar name already exists. Please check the existing records before saving.
             </div>
@@ -977,7 +998,7 @@
 
       return (<div>
         <div className="form-grid">
-          <Field label="Name of Establishment" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Bayfront Hotel" /></Field>
+          <Field label="Name of Enterprise" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Bayfront Hotel" /></Field>
           <Field label="Municipality" required>
             <select value={f.municipality} onChange={set("municipality")}>
               <option value="">Select municipality</option>
@@ -985,7 +1006,7 @@
             </select>
           </Field>
           <Field label="Proprietor / Owner">
-            <input type="text" value={f.proprietor} onChange={set("proprietor")} placeholder="Full name of proprietor or owner" />
+            <input type="text" value={f.proprietor} onChange={set("proprietor")} placeholder="Full name of proprietor or owner" disabled={isTourGuide} />
           </Field>
           <Field label="Classification" required>
             <select value={f.classification} onChange={set("classification")}>
@@ -1004,9 +1025,9 @@
           <Field label="Email Address">
             <input type="email" value={f.email} onChange={set("email")} placeholder="example@email.com" />
           </Field>
-          <Field label="Number of Rooms"><input type="text" value={f.rooms} onChange={set("rooms")} placeholder="0" /></Field>
-          <Field label="Male Employees"><input type="text" value={f.maleEmployees} onChange={set("maleEmployees")} placeholder="0" /></Field>
-          <Field label="Female Employees"><input type="text" value={f.femaleEmployees} onChange={set("femaleEmployees")} placeholder="0" /></Field>
+          <Field label="Number of Rooms"><input type="text" value={f.rooms} onChange={set("rooms")} placeholder="0" disabled={isTourGuide} /></Field>
+          <Field label="Male Employees"><input type="text" value={f.maleEmployees} onChange={set("maleEmployees")} placeholder="0" disabled={isTourGuide} /></Field>
+          <Field label="Female Employees"><input type="text" value={f.femaleEmployees} onChange={set("femaleEmployees")} placeholder="0" disabled={isTourGuide} /></Field>
           <Field label="Remarks"><input type="text" value={f.remarks} onChange={set("remarks")} placeholder="Optional remarks" /></Field>
           <Field label="Year (Established / Registered)"><input type="text" value={f.year} onChange={set("year")} placeholder="e.g. 2021" /></Field>
           <Field label="Status of Accreditation">
@@ -1075,7 +1096,7 @@
               </button>
             </Field>
           </div>
-          <Field label="Status of Establishment">
+          <Field label="Status of Enterprise">
             <select value={f.status} onChange={set("status")}>
               {ESTAB_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
@@ -1091,7 +1112,7 @@
         </div>
         <div className="form-actions">
           <button className="btn" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary" onClick={submit}>{mode==="edit" ? "Save Changes" : "Save Establishment"}</button>
+          <button className="btn btn-primary" onClick={submit}>{mode==="edit" ? "Save Changes" : "Save Enterprise"}</button>
         </div>
       </div>);
     }
@@ -1104,7 +1125,7 @@
       return (<div>
         <div className="view-readonly-banner"><Icon d={ICONS.eye} size={14} color="#1C6B6E" /> Read-only view — no changes can be made here. Use Edit to modify this record.</div>
         <div className="view-grid">
-          <ViewField label="Name of Establishment" value={item.name} />
+          <ViewField label="Name of Enterprise" value={item.name} />
           <ViewField label="Municipality" value={item.municipality} />
           <ViewField label="Proprietor / Owner" value={item.proprietor} />
           <ViewField label="Classification" value={item.classification} />
@@ -1124,7 +1145,7 @@
             <ViewField label="Accreditation Number" value={latestAccred.number} />
             <ViewField label="Accreditation Validity" value={latestAccred.validity ? formatDateDisplay(latestAccred.validity) : ""} />
           </React.Fragment>)}
-          <ViewField label="Status of Establishment" value={item.status==="Others" && item.statusOthers ? item.statusOthers : item.status} />
+          <ViewField label="Status of Enterprise" value={item.status==="Others" && item.statusOthers ? item.statusOthers : item.status} />
           <ViewField label="Registered on TourLISTA?" value={item.tourlista||"No"} />
         </div>
 
@@ -1159,7 +1180,7 @@
 
         <div className="form-actions">
           <button className="btn" onClick={onClose}>Close</button>
-          <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit This Establishment</button>
+          <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit This Enterprise</button>
         </div>
       </div>);
     }
@@ -1373,13 +1394,15 @@
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Establishment</button>
+          <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Enterprise</button>
         </div>
 
         {view==="dashboard" ? (
           <div>
             <div className="stat-cards">
-              <StatCard label="Total Establishments" value={data.length} />
+              <StatCard label="Total Enterprises" value={data.length} />
+              <StatCard label="Currently Operating (Active)" value={data.filter(d=>d.status==="Active").length} />
+              <StatCard label="Not Active" value={data.filter(d=>d.status!=="Active").length} />
               <StatCard label="On TourLISTA" value={data.filter(d=>d.tourlista==="Yes").length} />
               <StatCard label="Total Employees" value={data.reduce((sum,d)=>sum+totalEmployees(d),0)} />
               <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
@@ -1416,7 +1439,7 @@
                   <BarList data={accredYearStats.map(s=>({name:s.year, count:s.count}))} color="#2B7A57" />
                   <div className="table-wrap" style={{marginTop:14}}>
                     <table style={{minWidth:"auto"}}>
-                      <thead><tr><th>Accreditation Year</th><th>Number of Accredited Establishments</th></tr></thead>
+                      <thead><tr><th>Accreditation Year</th><th>Number of Accredited Enterprises</th></tr></thead>
                       <tbody>
                         {accredYearStats.map((s,i)=>(
                           <tr key={s.year} className={i%2?"odd":""}><td>{s.year}</td><td>{s.count}</td></tr>
@@ -1427,7 +1450,7 @@
                 </React.Fragment>)}
                 <div style={{borderTop:"1px solid var(--border)", marginTop:16, paddingTop:14}}>
                   <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:8}}>
-                    <div style={{fontWeight:700, fontSize:13}}>Accredited Establishments by Year</div>
+                    <div style={{fontWeight:700, fontSize:13}}>Accredited Enterprises by Year</div>
                     <div style={{minWidth:180}}>
                       {/* FIXED: Dropdown options mapped directly from accredYearStats */}
                       <select value={statYear} onChange={(e)=>setStatYear(e.target.value)}>
@@ -1448,10 +1471,10 @@
                     </div>
                     <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Accredited by Type of Enterprise ({statYear})</div>
                     <BarList data={statYearByType} color="#C08A2E" />
-                    <div style={{fontWeight:700, fontSize:13, margin:"18px 0 8px"}}>Establishments Accredited in {statYear}</div>
+                    <div style={{fontWeight:700, fontSize:13, margin:"18px 0 8px"}}>Enterprises Accredited in {statYear}</div>
                     <div className="table-wrap">
                       <table style={{minWidth:"auto"}}>
-                        <thead><tr><th>Establishment</th><th>Municipality</th><th>Type of Enterprise</th><th>Accreditation Level</th><th>Status (as of today)</th><th>Accredited Years</th></tr></thead>
+                        <thead><tr><th>Enterprise</th><th>Municipality</th><th>Type of Enterprise</th><th>Accreditation Level</th><th>Status (as of today)</th><th>Accredited Years</th></tr></thead>
                         <tbody>
                           {accreditedInStatYear.map((d,i)=>{
                             const yearEntry = accredEntryForYear(d, statYear);
@@ -1480,7 +1503,7 @@
         ) : (
           <div>
             <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
-              {key:"name", label:"Establishment", type:"search", placeholder:"Search by name"},
+              {key:"name", label:"Enterprise", type:"search", placeholder:"Search by name"},
               {key:"municipality", label:"Municipality"},
               {key:"classification", label:"Classification"},
               {key:"type", label:"Type"},
@@ -1490,7 +1513,7 @@
             ]} />
             <div className="table-wrap">
               <table>
-                <thead><tr>{["Establishment","Municipality","Rooms","Male","Female","Total Employees","Type","Accreditation","TourLISTA","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Enterprise","Municipality","Rooms","Male","Female","Total Employees","Type","Accreditation","TourLISTA","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
                 <tbody>
                   {filtered.map((d,i)=>{
                     const accredState = getAccredState(d);
@@ -1543,7 +1566,7 @@
         )}
 
         {modal && modal.mode==="view" && (
-          <Modal title="Establishment Information" onClose={()=>setModal(null)}>
+          <Modal title="Enterprise Information" onClose={()=>setModal(null)}>
             <EstablishmentViewInfo
               item={modal.item}
               onClose={()=>setModal(null)}
@@ -1552,7 +1575,7 @@
           </Modal>
         )}
         {modal && (modal.mode==="edit" || modal.mode==="add") && (
-          <Modal title={modal.mode==="edit" ? "Edit Establishment" : "Add Establishment"} onClose={requestCloseModal}>
+          <Modal title={modal.mode==="edit" ? "Edit Enterprise" : "Add Enterprise"} onClose={requestCloseModal}>
             <EstablishmentForm
               key={modal.mode + (modal.item ? modal.item.id : "new")}
               mode={modal.mode}
@@ -1770,15 +1793,15 @@
 
             alert(
               "Import complete.\n\n" +
-              "Establishments added: " + estabToAdd.length + "\n" +
-              "Establishments skipped (missing required fields): " + estabSkipped + "\n" +
-              "Establishments skipped (already in inventory): " + estabDup + "\n\n" +
+              "Enterprises added: " + estabToAdd.length + "\n" +
+              "Enterprises skipped (missing required fields): " + estabSkipped + "\n" +
+              "Enterprises skipped (already in inventory): " + estabDup + "\n\n" +
               "Attractions added: " + attrToAdd.length + "\n" +
               "Attractions skipped (missing required fields): " + attrSkipped + "\n" +
               "Attractions skipped (already in inventory): " + attrDup
             );
           } catch(err){
-            alert("Could not read this file. Please upload the .xlsx backup file with the original 'Establishments' and 'Attractions' sheets, unedited headers.");
+            alert("Could not read this file. Please upload the .xlsx backup file with the original 'Enterprises' and 'Attractions' sheets, unedited headers.");
           }
         };
         reader.readAsArrayBuffer(file);
@@ -1842,7 +1865,7 @@
 
       return (<div className="app">
         <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
-        <h1 className="title">Tourism Establishment &amp; Attraction Inventory</h1>
+        <h1 className="title">Tourism Enterprise &amp; Attraction Inventory</h1>
         <div className="subtitle">Data inventory management for provincial tourism establishments and natural/cultural attractions.</div>
 
         <BackupToolbar
@@ -1853,7 +1876,7 @@
 
         <div className="section-tabs">
           <button className={"section-tab " + (tab==="establishments"?"active":"")} onClick={()=>setTab("establishments")}>
-            Establishments ({establishments.length})
+            Enterprises ({establishments.length})
           </button>
           <button className={"section-tab " + (tab==="attractions"?"active":"")} onClick={()=>setTab("attractions")}>
             Attractions ({attractions.length})
