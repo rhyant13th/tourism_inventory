@@ -225,8 +225,11 @@
         for(let y=lo; y<=hi; y++) years.push(String(y));
         return years;
       }
+      // Coverage starts N years before the validity expiry date and runs to the validity date
+      // (Regular: N=2, Basic: N=1). Since the period doesn't align to Jan 1–Dec 31, it touches
+      // N+1 calendar years — e.g. Regular expiring Oct 31, 2026 covers 2024, 2025, 2026.
       const durationYears = (entry && entry.type==="Regular") ? 2 : 1;
-      for(let i=0;i<durationYears;i++) years.push(String(endY - (durationYears-1) + i));
+      for(let y = endY - durationYears; y <= endY; y++) years.push(String(y));
       return years;
     }
 
@@ -250,6 +253,20 @@
         }]);
       }
       return [];
+    }
+
+    // For an establishment counted as accredited in `year` (per the calendar-year coverage
+    // rule), tells whether that accreditation is still currently valid as of today or has
+    // already lapsed. Picks the accreditation entry whose coverage includes `year` with the
+    // latest validity date (the one "in force" for that year), then compares it to today.
+    function establishmentYearRealtimeStatus(d, year){
+      const entries = getAccredHistory(d).filter(h => accredEntryCoverageYears(h).includes(year));
+      if(entries.length===0) return null;
+      const dated = entries.filter(h=>h.validity);
+      const latest = (dated.length ? dated : entries).slice()
+        .sort((a,b)=> (a.validity||"").localeCompare(b.validity||"")).pop();
+      if(!latest || !latest.validity) return "Accredited";
+      return latest.validity < todayISO() ? "Expired" : "Accredited";
     }
 
     function establishmentAccreditedYears(d){
@@ -1229,7 +1246,7 @@
       const [modal, setModal] = useState(null);
       const [toDelete, setToDelete] = useState(null);
       const [statMunicipality, setStatMunicipality] = useState("");
-      const [statYear, setStatYear] = useState("");
+      const [statYear, setStatYear] = useState(() => String(new Date().getFullYear()));
       const [formDirty, setFormDirty] = useState(false);
       const [showLeaveWarning, setShowLeaveWarning] = useState(false);
 
@@ -1283,6 +1300,17 @@
         }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name));
       }, [data, statMunicipality, statYear]);
 
+      // Same group as accreditedInStatYear, split by real-time status as of today —
+      // e.g. "30 accredited for 2026" becomes "28 still valid today, 2 expired this year".
+      const statYearBreakdown = useMemo(()=>{
+        if(!statYear) return null;
+        let valid = 0, expired = 0;
+        accreditedInStatYear.forEach(d=>{
+          if(establishmentYearRealtimeStatus(d, statYear)==="Expired") expired++; else valid++;
+        });
+        return { total: accreditedInStatYear.length, valid, expired };
+      }, [accreditedInStatYear, statYear]);
+
       const save = (f) => {
         if(modal.mode==="edit"){
           setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
@@ -1327,9 +1355,6 @@
           <div>
             <div className="stat-cards">
               <StatCard label="Total Establishments" value={data.length} />
-              <StatCard label="Accredited (Valid)" value={data.filter(d=>getAccredState(d)==="Accredited").length} />
-              <StatCard label="Accreditation Expired" value={data.filter(d=>getAccredState(d)==="Expired").length} />
-              <StatCard label="Not Accredited" value={data.filter(d=>getAccredState(d)==="Not Accredited").length} />
               <StatCard label="On TourLISTA" value={data.filter(d=>d.tourlista==="Yes").length} />
               <StatCard label="Total Employees" value={data.reduce((sum,d)=>sum+totalEmployees(d),0)} />
               <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
@@ -1390,22 +1415,32 @@
                     <div style={{fontSize:12, color:"var(--subtext)"}}>Select a year above to list the establishments whose accreditation was valid during that year.</div>
                   ) : accreditedInStatYear.length===0 ? (
                     <div style={{fontSize:13, color:"var(--subtext)"}}>No establishments were accredited in {statYear}.</div>
-                  ) : (
+                  ) : (<React.Fragment>
+                    <div className="stat-cards" style={{marginBottom:14}}>
+                      <StatCard label={"Accredited for " + statYear} value={statYearBreakdown.total} />
+                      <StatCard label={"Still Valid (as of today)"} value={statYearBreakdown.valid} />
+                      <StatCard label={"Expired (as of today)"} value={statYearBreakdown.expired} />
+                    </div>
                     <div className="table-wrap">
                       <table style={{minWidth:"auto"}}>
-                        <thead><tr><th>Establishment</th><th>Municipality</th><th>Accredited Years</th></tr></thead>
+                        <thead><tr><th>Establishment</th><th>Municipality</th><th>Status (as of today)</th><th>Accredited Years</th></tr></thead>
                         <tbody>
                           {accreditedInStatYear.map((d,i)=>(
                             <tr key={d.id} className={i%2?"odd":""}>
                               <td>{d.name}</td>
                               <td>{d.municipality}</td>
+                              <td>
+                                <span className={"pill " + (establishmentYearRealtimeStatus(d, statYear)==="Expired" ? "pill-danger" : "pill-teal")}>
+                                  {establishmentYearRealtimeStatus(d, statYear)}
+                                </span>
+                              </td>
                               <td>{establishmentAccreditedYears(d).join(", ")}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                  )}
+                  </React.Fragment>)}
                 </div>
               </div>
             </div>
