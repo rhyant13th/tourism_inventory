@@ -1294,6 +1294,7 @@
         accredStatus: ["Accredited","Expired","Not Accredited"],
         classification: CLASSIFICATIONS,
         tourlista: TOURLISTA_OPTIONS,
+        status: ESTAB_STATUSES,
         year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
       }), [data]);
 
@@ -1303,6 +1304,7 @@
         if(filters.classification && d.classification!==filters.classification) return false;
         if(filters.type && d.type!==filters.type) return false;
         if(filters.accredStatus && getAccredState(d)!==filters.accredStatus) return false;
+        if(filters.status && d.status!==filters.status) return false;
         if(filters.tourlista && (d.tourlista||"No")!==filters.tourlista) return false;
         if(filters.year && d.year!==filters.year) return false;
         return true;
@@ -1508,6 +1510,7 @@
               {key:"classification", label:"Classification"},
               {key:"type", label:"Type"},
               {key:"accredStatus", label:"Accreditation"},
+              {key:"status", label:"Status"},
               {key:"tourlista", label:"TourLISTA"},
               {key:"year", label:"Year"},
             ]} />
