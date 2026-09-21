@@ -1780,6 +1780,10 @@
       const fileRef = useRef(null);
 
       const handleExport = () => {
+        if (!isAdmin) {
+          alert("View-only mode: only the admin can download data.");
+          return;
+        }
         exportInventoryWorkbook(establishments, attractions);
       };
 
@@ -1839,13 +1843,17 @@
         : "Not saved yet.";
 
       return (<div className="data-toolbar">
-        <div className="grow"><b>Backup &amp; Submission:</b> Download the inventory as an Excel file to back up or submit to the national agency — fill it in (here or offline), then upload it back to bulk-add records instead of encoding one by one.
+        <div className="grow"><b>Backup &amp; Submission:</b> {isAdmin
+          ? "Download the inventory as an Excel file to back up or submit to the national agency — fill it in (here or offline), then upload it back to bulk-add records instead of encoding one by one."
+          : "You are in view-only mode. Download, upload, and save actions are available only to the administrator."}
           <div style={{fontSize:12, color: cloudStatus==="error" ? "#A8442D" : "#5E6E6A", marginTop:4}}>{statusText}</div>
         </div>
         {isAdmin && (
           <button className="btn btn-primary" onClick={onSave} disabled={cloudStatus==="saving"}><Icon d={ICONS.download} size={14} color="#fff" /> {cloudStatus==="saving" ? "Saving…" : "Save"}</button>
         )}
-        <button className="btn btn-outline-teal" onClick={handleExport}><Icon d={ICONS.download} size={14} color="#1C6B6E" /> Download Excel Backup</button>
+        {isAdmin && (
+          <button className="btn btn-outline-teal" onClick={handleExport}><Icon d={ICONS.download} size={14} color="#1C6B6E" /> Download Excel Backup</button>
+        )}
         {isAdmin && (
           <button className="btn btn-outline-gold" onClick={()=>fileRef.current.click()}><Icon d={ICONS.upload} size={14} color="#8A5F16" /> Upload Encoded Excel</button>
         )}
@@ -1974,7 +1982,7 @@
 
         <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
         <h1 className="title">Tourism Enterprise &amp; Attraction Inventory</h1>
-        <div className="subtitle">
+       <div className="subtitle">
   Data inventory management for provincial tourism establishments and natural/cultural attractions by <span style={{ fontWeight: "bold", color: "#f59e0b" }}>RYAN R. TAJONERA</span>, Tourism Operations Officer II.
   {!isAdmin && <span style={{color:"var(--teal)", fontWeight:600}}> — You are in view-only mode</span>}
 </div>
