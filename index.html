@@ -121,9 +121,6 @@
                     <a href="#tass" onclick="switchTab('tass')" id="nav-tass" class="nav-item flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition">
                         <i class="fa-solid fa-umbrella-beach w-6 text-center text-base"></i> <span class="ml-2">Same-Day Visitors (TAss)</span>
                     </a>
-                    <a href="#cbtos" onclick="switchTab('cbtos')" id="nav-cbtos" class="nav-item flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition">
-                        <i class="fa-solid fa-people-group w-6 text-center text-base"></i> <span class="ml-2">Community-Based Tourism Orgs (CBTOs)</span>
-                    </a>
                 </div>
 
                 <div class="space-y-1">
@@ -423,69 +420,6 @@
                     <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500">
                         <span>Showing <strong id="tassRecordCount">0</strong> records</span>
                         <div class="space-x-1" id="tassPagination"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- SECTION 3B: COMMUNITY-BASED TOURISM ORGANIZATIONS (CBTOs) -->
-            <section id="view-cbtos" class="tab-content hidden space-y-6">
-                <div class="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div>
-                        <h2 class="text-lg font-bold text-slate-800">Community-Based Tourism Organizations (CBTOs)</h2>
-                        <p class="text-xs text-slate-500">Manage, record, and import CBTO registry and membership information.</p>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button onclick="openModal('modalCBTO')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs md:text-sm px-3.5 py-2 rounded-lg font-medium transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-plus"></i> Add Single Record
-                        </button>
-                        <button onclick="openModal('modalBulkCBTO')" class="bg-navy-700 hover:bg-navy-800 text-white text-xs md:text-sm px-3.5 py-2 rounded-lg font-medium transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-file-import"></i> Bulk Upload Excel
-                        </button>
-                        <button onclick="exportCBTOsExcel()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs md:text-sm px-3.5 py-2 rounded-lg font-medium transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-file-export"></i> Export Excel
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Filters -->
-                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <input type="text" id="filterCBTOSearch" oninput="renderCBTOTable()" placeholder="Search CBTO name, place, or contact person..." class="text-xs bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500">
-                        <select id="filterCBTOMuni" onchange="renderCBTOTable()" class="text-xs bg-slate-50 border border-slate-300 rounded-lg px-3 py-2"><option value="ALL">All Municipalities</option></select>
-                    </div>
-                </div>
-
-                <!-- Saved Data Status -->
-                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-xs text-emerald-900"><div class="flex flex-wrap items-center justify-between gap-3"><div><strong>Saved CBTOs:</strong> <span id="cbtoSavedCount">0</span> records</div></div></div>
-
-                <!-- Table View -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="overflow-x-auto custom-scrollbar">
-                        <table class="w-full text-left border-collapse text-xs">
-                            <thead class="bg-slate-800 text-slate-200 uppercase font-semibold">
-                                <tr>
-                                    <th class="p-3 border-b">Municipality</th>
-                                    <th class="p-3 border-b">Complete Name of CBTO</th>
-                                    <th class="p-3 border-b">Purpose / Objective</th>
-                                    <th class="p-3 border-b">Nature of Activity in the Destination</th>
-                                    <th class="p-3 border-b">Complete Address</th>
-                                    <th class="p-3 border-b">Contact Person &amp; Designation</th>
-                                    <th class="p-3 border-b">Contact Number(s)</th>
-                                    <th class="p-3 border-b">Email Address</th>
-                                    <th class="p-3 border-b text-right">Male Members</th>
-                                    <th class="p-3 border-b text-right">Female Members</th>
-                                    <th class="p-3 border-b text-right bg-slate-700">Total Members</th>
-                                    <th class="p-3 border-b text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cbtoTableBody" class="divide-y divide-slate-100 font-medium text-slate-700">
-                                <tr><td colspan="12" class="p-6 text-center text-slate-400">Loading records...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500">
-                        <span>Showing <strong id="cbtoRecordCount">0</strong> records</span>
-                        <div class="space-x-1" id="cbtoPagination"></div>
                     </div>
                 </div>
             </section>
@@ -927,79 +861,6 @@
         </div>
     </div>
 
-    <!-- MODAL 2B: ADD/EDIT COMMUNITY-BASED TOURISM ORGANIZATIONS (CBTOs) -->
-    <div id="modalCBTO" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="p-4 bg-navy-900 text-white flex justify-between items-center">
-                <h3 id="modalCBTOTitle" class="font-bold text-sm md:text-base">Add CBTO Record</h3>
-                <button onclick="closeModal('modalCBTO')" class="text-slate-400 hover:text-white text-lg">&times;</button>
-            </div>
-            <form id="formCBTO" onsubmit="saveCBTORecord(event)" class="p-5 overflow-y-auto space-y-4 custom-scrollbar text-xs">
-                <input type="hidden" id="cbto_id">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <label class="block font-semibold mb-1">Municipality *</label>
-                        <input type="text" id="cbto_municipality" required class="w-full border rounded p-2 text-xs">
-                    </div>
-                    <div>
-                        <label class="block font-semibold mb-1">Complete Name of CBTO *</label>
-                        <input type="text" id="cbto_name" required class="w-full border rounded p-2 text-xs">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block font-semibold mb-1">Purpose / Objective</label>
-                    <textarea id="cbto_purpose" rows="2" class="w-full border rounded p-2 text-xs"></textarea>
-                </div>
-                <div>
-                    <label class="block font-semibold mb-1">Nature of Activity in the Destination</label>
-                    <textarea id="cbto_nature" rows="2" class="w-full border rounded p-2 text-xs"></textarea>
-                </div>
-                <div>
-                    <label class="block font-semibold mb-1">Complete Address</label>
-                    <input type="text" id="cbto_address" class="w-full border rounded p-2 text-xs">
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                        <label class="block font-semibold mb-1">Contact Person and Designation</label>
-                        <input type="text" id="cbto_contact_person" class="w-full border rounded p-2 text-xs" placeholder="e.g. Juan Dela Cruz, President">
-                    </div>
-                    <div>
-                        <label class="block font-semibold mb-1">Contact Number(s)</label>
-                        <input type="text" id="cbto_contact_number" class="w-full border rounded p-2 text-xs">
-                    </div>
-                    <div>
-                        <label class="block font-semibold mb-1">Email Address</label>
-                        <input type="email" id="cbto_email" class="w-full border rounded p-2 text-xs">
-                    </div>
-                </div>
-
-                <div class="border-t pt-3 space-y-2">
-                    <p class="font-bold text-slate-700">Membership Counts</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block mb-1">No. of Male Members</label>
-                            <input type="number" id="cbto_male" min="0" value="0" oninput="calcCBTOTotals()" class="w-full border rounded p-2 text-xs">
-                        </div>
-                        <div>
-                            <label class="block mb-1">No. of Female Members</label>
-                            <input type="number" id="cbto_female" min="0" value="0" oninput="calcCBTOTotals()" class="w-full border rounded p-2 text-xs">
-                        </div>
-                    </div>
-                    <div class="bg-slate-100 p-2.5 rounded text-right font-bold text-slate-800">
-                        TOTAL Members: <span id="cbto_calc_total" class="text-teal-700 font-extrabold">0</span>
-                    </div>
-                </div>
-
-                <div class="p-3 bg-slate-50 border-t flex justify-end space-x-2">
-                    <button type="button" onclick="closeModal('modalCBTO')" class="px-4 py-2 rounded bg-slate-200 text-slate-700 font-medium hover:bg-slate-300">Cancel</button>
-                    <button type="submit" class="px-4 py-2 rounded bg-teal-600 text-white font-medium hover:bg-teal-700">Save Record</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- MODAL 3: BULK UPLOAD (AEs) -->
     <div id="modalBulkAE" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -1109,61 +970,6 @@
         </div>
     </div>
 
-    <!-- MODAL 4B: BULK UPLOAD (CBTOs) -->
-    <div id="modalBulkCBTO" class="fixed inset-0 bg-slate-900/60 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="p-4 bg-navy-900 text-white flex justify-between items-center">
-                <h3 class="font-bold text-sm md:text-base">Bulk Upload CBTO Data</h3>
-                <button onclick="closeModal('modalBulkCBTO')" class="text-slate-400 hover:text-white text-lg">&times;</button>
-            </div>
-            <div class="p-5 overflow-y-auto space-y-4 custom-scrollbar text-xs">
-                <div class="bg-blue-50 border border-blue-200 p-3 rounded-lg text-blue-800 space-y-1">
-                    <p class="font-bold"><i class="fa-solid fa-circle-info mr-1"></i> Unique Key Matching Rule:</p>
-                    <p>Upload the Excel file, click <strong>1. Process Excel</strong> to preview it, then click <strong>2. Save Data</strong>. Rows are matched to existing records by <strong>Municipality + Complete Name of CBTO</strong> - a match updates that record, everything else is added as new.</p>
-                </div>
-
-                <div class="flex items-center space-x-3">
-                    <input type="file" id="bulkCBTOFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100">
-                    <button onclick="processCBTOBulkExcel()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium">1. Process Excel</button>
-                    <button id="btnSaveBulkCBTO" onclick="commitCBTOBulkImport()" disabled class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-bold">2. Save Data</button>
-                    <button onclick="downloadCBTOTemplate()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium"><i class="fa-solid fa-file-excel mr-1"></i> Excel Template</button>
-                </div>
-
-                <!-- Preview Stats -->
-                <div id="bulkCBTOSummary" class="hidden grid grid-cols-3 gap-3 text-center font-bold">
-                    <div class="p-2 bg-emerald-100 text-emerald-800 rounded"><span id="bulkCBTONewCount">0</span> New Records</div>
-                    <div class="p-2 bg-amber-100 text-amber-800 rounded"><span id="bulkCBTOUpdateCount">0</span> Updated Records</div>
-                    <div class="p-2 bg-rose-100 text-rose-800 rounded"><span id="bulkCBTOSkippedCount">0</span> Rejected/Errors</div>
-                </div>
-
-                <div id="bulkCBTOPreviewContainer" class="hidden overflow-x-auto max-h-60 border rounded custom-scrollbar">
-                    <table class="w-full text-left text-[11px] border-collapse">
-                        <thead class="bg-slate-100 font-semibold sticky top-0">
-                            <tr>
-                                <th class="p-2 border">Action</th>
-                                <th class="p-2 border">Municipality</th>
-                                <th class="p-2 border">Complete Name of CBTO</th>
-                                <th class="p-2 border">Contact Person</th>
-                                <th class="p-2 border">Male</th>
-                                <th class="p-2 border">Female</th>
-                                <th class="p-2 border">Total</th>
-                                <th class="p-2 border">Status/Error</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bulkCBTOPreviewBody" class="divide-y"></tbody>
-                    </table>
-                </div>
-
-                <div id="bulkCBTOErrorLog" class="hidden p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded text-[11px] max-h-32 overflow-y-auto"></div>
-            </div>
-            <div class="p-3 bg-slate-50 border-t flex justify-end space-x-2">
-                <button onclick="closeModal('modalBulkCBTO')" class="px-4 py-2 rounded bg-slate-200 text-slate-700 font-medium">Cancel</button>
-                <button id="btnConfirmBulkCBTO" onclick="commitCBTOBulkImport()" class="px-4 py-2 rounded bg-teal-600 hover:bg-teal-700 text-white font-medium">Save Data</button>
-            </div>
-        </div>
-    </div>
-
-
     <!-- JAVASCRIPT APPLICATION LOGIC -->
     <script>
         /**
@@ -1173,18 +979,16 @@
         
         // IndexedDB Configuration
         const DB_NAME = "TourismDataBankDB";
-        const DB_VERSION = 2;
+        const DB_VERSION = 3;
         let db = null;
 
         // In-Memory Data Collections
         let aeRecords = [];
         let tassRecords = [];
-        let cbtoRecords = [];
 
         // Temporary parsed bulk upload queues
         let pendingBulkAE = [];
         let pendingBulkTAss = [];
-        let pendingBulkCBTO = [];
 
         /**
          * CLOUD SYNC QUEUE
@@ -1196,8 +1000,8 @@
          * localStorage so nothing is lost if the tab closes before syncing.
          */
         const PENDING_SYNC_KEY = "tourismPendingSync_v1";
-        let pendingSync = { aes: new Set(), tass: new Set(), cbtos: new Set() };
-        let pendingDeletes = { aes: [], tass: [], cbtos: [] };
+        let pendingSync = { aes: new Set(), tass: new Set() };
+        let pendingDeletes = { aes: [], tass: [] };
 
         function loadPendingSync() {
             try {
@@ -1206,10 +1010,8 @@
                 const parsed = JSON.parse(raw);
                 pendingSync.aes = new Set(parsed.aes || []);
                 pendingSync.tass = new Set(parsed.tass || []);
-                pendingSync.cbtos = new Set(parsed.cbtos || []);
                 pendingDeletes.aes = parsed.deletesAes || [];
                 pendingDeletes.tass = parsed.deletesTass || [];
-                pendingDeletes.cbtos = parsed.deletesCbtos || [];
             } catch (_) { /* corrupt/unavailable storage - start clean */ }
         }
 
@@ -1218,10 +1020,8 @@
                 localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify({
                     aes: Array.from(pendingSync.aes),
                     tass: Array.from(pendingSync.tass),
-                    cbtos: Array.from(pendingSync.cbtos),
                     deletesAes: pendingDeletes.aes,
-                    deletesTass: pendingDeletes.tass,
-                    deletesCbtos: pendingDeletes.cbtos
+                    deletesTass: pendingDeletes.tass
                 }));
             } catch (_) { /* storage unavailable - sync queue just won't survive reload */ }
         }
@@ -1326,11 +1126,11 @@
                         const tassStore = db.createObjectStore("tass", { keyPath: "id", autoIncrement: true });
                         tassStore.createIndex("uniqueKey", ["province", "municipality", "year", "month", "attraction"], { unique: true });
                     }
-                    // Store 3: Community-Based Tourism Organizations (CBTOs)
-                    if (!db.objectStoreNames.contains("cbtos")) {
-                        const cbtoStore = db.createObjectStore("cbtos", { keyPath: "id", autoIncrement: true });
-                        cbtoStore.createIndex("uniqueKey", ["municipality", "cbto_name"], { unique: true });
-                    }
+                    // Schema cleanup: drop any object store from an older DB version that
+                    // is no longer part of the schema (only "aes" and "tass" remain).
+                    Array.from(db.objectStoreNames).forEach(name => {
+                        if (name !== "aes" && name !== "tass") db.deleteObjectStore(name);
+                    });
                 };
 
                 request.onsuccess = function(e) {
@@ -1352,7 +1152,6 @@
             if (!db) return;
             aeRecords = await getAllFromStore("aes");
             tassRecords = await getAllFromStore("tass");
-            cbtoRecords = await getAllFromStore("cbtos");
         }
 
         function getAllFromStore(storeName) {
@@ -1438,14 +1237,10 @@
          */
         const CLOUD_AE = "tourism_ae_records";
         const CLOUD_TASS = "tourism_tass_records";
-        const CLOUD_CBTOS = "tourism_cbto_records";
-        const CLOUD_COLLECTIONS = { aes: CLOUD_AE, tass: CLOUD_TASS, cbtos: CLOUD_CBTOS };
+        const CLOUD_COLLECTIONS = { aes: CLOUD_AE, tass: CLOUD_TASS };
 
         function cloudDocId(type, r) {
-            // CBTOs have no Year/Month - they're identified by Municipality + org name.
-            const parts = type === "cbtos"
-                ? [r.municipality, r.cbto_name]
-                : [r.province, r.municipality, r.year, r.month, type === "aes" ? r.establishment : r.attraction];
+            const parts = [r.province, r.municipality, r.year, r.month, type === "aes" ? r.establishment : r.attraction];
             return parts.map(v => String(v ?? "").trim().toLowerCase())
                 .join("__").replace(/[^a-z0-9_-]+/g, "_").slice(0, 500);
         }
@@ -1480,20 +1275,18 @@
         async function loadAllFromCloud() {
             try {
                 await waitForCloud();
-                const [cloudAEs, cloudTAss, cloudCBTOs] = await Promise.all([
+                const [cloudAEs, cloudTAss] = await Promise.all([
                     getCloudRecords("aes"),
-                    getCloudRecords("tass"),
-                    getCloudRecords("cbtos")
+                    getCloudRecords("tass")
                 ]);
 
-                if (cloudAEs.length || cloudTAss.length || cloudCBTOs.length) {
+                if (cloudAEs.length || cloudTAss.length) {
                     await Promise.all([
                         clearAndBulkPut("aes", cloudAEs),
-                        clearAndBulkPut("tass", cloudTAss),
-                        clearAndBulkPut("cbtos", cloudCBTOs)
+                        clearAndBulkPut("tass", cloudTAss)
                     ]);
                     await loadAllRecords();
-                    updateCloudStatus(`Cloud Synced (${(cloudAEs.length + cloudTAss.length + cloudCBTOs.length).toLocaleString()})`, true);
+                    updateCloudStatus(`Cloud Synced (${(cloudAEs.length + cloudTAss.length).toLocaleString()})`, true);
                     return { connected: true, hasData: true };
                 }
 
@@ -1544,15 +1337,14 @@
         // edited, or previously failed to sync — not the whole database.
         async function saveAllToCloud(showMessage = true, forceAll = false) {
             try {
-                await Promise.all([flushPendingDeletes("aes"), flushPendingDeletes("tass"), flushPendingDeletes("cbtos")]);
+                await Promise.all([flushPendingDeletes("aes"), flushPendingDeletes("tass")]);
 
                 const aeToSync = forceAll ? aeRecords : aeRecords.filter(r => pendingSync.aes.has(r.id));
                 const tassToSync = forceAll ? tassRecords : tassRecords.filter(r => pendingSync.tass.has(r.id));
-                const cbtoToSync = forceAll ? cbtoRecords : cbtoRecords.filter(r => pendingSync.cbtos.has(r.id));
-                const total = aeToSync.length + tassToSync.length + cbtoToSync.length;
+                const total = aeToSync.length + tassToSync.length;
 
                 if (total === 0) {
-                    updateCloudStatus(`Cloud Synced (${(aeRecords.length + tassRecords.length + cbtoRecords.length).toLocaleString()})`, true);
+                    updateCloudStatus(`Cloud Synced (${(aeRecords.length + tassRecords.length).toLocaleString()})`, true);
                     if (showMessage) showToast("Everything is already up to date in the cloud.", "info");
                     return true;
                 }
@@ -1560,22 +1352,19 @@
                 updateCloudStatus("Saving to Cloud...");
                 await Promise.all([
                     aeToSync.length ? saveRecordsToCloud("aes", aeToSync) : Promise.resolve(),
-                    tassToSync.length ? saveRecordsToCloud("tass", tassToSync) : Promise.resolve(),
-                    cbtoToSync.length ? saveRecordsToCloud("cbtos", cbtoToSync) : Promise.resolve()
+                    tassToSync.length ? saveRecordsToCloud("tass", tassToSync) : Promise.resolve()
                 ]);
 
                 if (forceAll) {
                     pendingSync.aes.clear();
                     pendingSync.tass.clear();
-                    pendingSync.cbtos.clear();
                     persistPendingSync();
                 } else {
                     clearDirty("aes", aeToSync.map(r => r.id));
                     clearDirty("tass", tassToSync.map(r => r.id));
-                    clearDirty("cbtos", cbtoToSync.map(r => r.id));
                 }
 
-                updateCloudStatus(`Cloud Saved (${(aeRecords.length + tassRecords.length + cbtoRecords.length).toLocaleString()})`, true);
+                updateCloudStatus(`Cloud Saved (${(aeRecords.length + tassRecords.length).toLocaleString()})`, true);
                 if (showMessage) showToast(`Cloud save complete: ${total.toLocaleString()} new/updated record(s) synced.`, "success");
                 return true;
             } catch (err) {
@@ -1646,7 +1435,7 @@
         }
         function formatReportingPeriods(periods){return periods.map(p=>`${MONTH_NAMES[p.month-1]} ${p.year}`).join(', ');}
         function countRecordsForPeriods(records,periods){const keys=new Set(periods.map(p=>`${p.year}-${p.month}`));return records.filter(r=>keys.has(`${Number(r.year)}-${Number(r.month)}`)).length;}
-        function recordUniqueKey(storeName,r){if(storeName==='cbtos')return [r.municipality,r.cbto_name].map(v=>String(v??'').trim().toLowerCase()).join('||');const subject=storeName==='aes'?r.establishment:r.attraction;return [r.province,r.municipality,r.year,r.month,subject].map(v=>String(v??'').trim().toLowerCase()).join('||');}
+        function recordUniqueKey(storeName,r){const subject=storeName==='aes'?r.establishment:r.attraction;return [r.province,r.municipality,r.year,r.month,subject].map(v=>String(v??'').trim().toLowerCase()).join('||');}
         function dedupePendingRecords(storeName,records){const map=new Map();records.forEach(r=>map.set(recordUniqueKey(storeName,r),r));return Array.from(map.values());}
         function replacePeriodsInStore(storeName,records,periods){
             return new Promise((resolve,reject)=>{
@@ -1688,17 +1477,10 @@
                 { province: "Occidental Mindoro", municipality: "San Jose", year: 2026, month: 1, attraction: "Ilin Island Eco Beach", tm_m: 220, tm_f: 210, tm_sum: 430, om_m: 310, om_f: 290, om_sum: 600, fcr_m: 40, fcr_f: 35, fcr_sum: 75, total_male: 570, total_female: 535, grand_total: 1105 }
             ];
 
-            const sampleCBTOs = [
-                { municipality: "Mamburao", cbto_name: "Mamburao Coastal Guardians Association", purpose: "Protect and promote the coastal beaches of Mamburao through community-led tourism.", nature_of_activity: "Beach clean-up drives, tour guiding, and homestay coordination.", address: "Barangay Poblacion, Mamburao, Occidental Mindoro", contact_person: "Elena Reyes, President", contact_number: "0917-555-0142", email: "mamburaococg@example.com", male_members: 18, female_members: 24, total_members: 42 },
-                { municipality: "Sablayan", cbto_name: "Apo Reef Community Tourism Cooperative", purpose: "Support sustainable ecotourism around Apo Reef Natural Park.", nature_of_activity: "Boat transport services, snorkeling guides, and marine sanctuary orientation.", address: "Barangay Poblacion III, Sablayan, Occidental Mindoro", contact_person: "Roberto Cruz, Chairperson", contact_number: "0918-555-0277", email: "apooreefctc@example.com", male_members: 26, female_members: 15, total_members: 41 }
-            ];
-
             const aeIds = await putRecordsBulk("aes", sampleAEs);
             const tassIds = await putRecordsBulk("tass", sampleTAss);
-            const cbtoIds = await putRecordsBulk("cbtos", sampleCBTOs);
             aeIds.forEach(id => markDirty("aes", id));
             tassIds.forEach(id => markDirty("tass", id));
-            cbtoIds.forEach(id => markDirty("cbtos", id));
 
             await loadAllRecords();
             refreshAllViews();
@@ -1709,13 +1491,10 @@
             if (confirm("Reset current database and reload original sample data?")) {
                 await clearStore("aes");
                 await clearStore("tass");
-                await clearStore("cbtos");
                 pendingSync.aes.clear();
                 pendingSync.tass.clear();
-                pendingSync.cbtos.clear();
                 pendingDeletes.aes = [];
                 pendingDeletes.tass = [];
-                pendingDeletes.cbtos = [];
                 persistPendingSync();
                 await preloadSampleData();
                 await saveAllToCloud(false, true);
@@ -1745,7 +1524,6 @@
             if (tabId === 'dashboard') refreshDashboard();
             if (tabId === 'aes') renderAETable();
             if (tabId === 'tass') renderTAssTable();
-            if (tabId === 'cbtos') renderCBTOTable();
             if (tabId === 'annual-summary') renderAnnualReport();
             if (tabId === 'monthly-summary') renderMonthlyReport();
             if (tabId === 'top-aes') renderTopAEReport();
@@ -1753,7 +1531,7 @@
         }
 
         function updateSavedDataStatus(){
-            const ae=document.getElementById('aeSavedCount'), ta=document.getElementById('tassSavedCount'), cb=document.getElementById('cbtoSavedCount'); if(ae)ae.textContent=aeRecords.length.toLocaleString(); if(ta)ta.textContent=tassRecords.length.toLocaleString(); if(cb)cb.textContent=cbtoRecords.length.toLocaleString();
+            const ae=document.getElementById('aeSavedCount'), ta=document.getElementById('tassSavedCount'); if(ae)ae.textContent=aeRecords.length.toLocaleString(); if(ta)ta.textContent=tassRecords.length.toLocaleString();
             const latest=records=>{if(!records.length)return 'None';const r=[...records].sort((a,b)=>Number(b.year)-Number(a.year)||Number(b.month)-Number(a.month))[0];return `${MONTH_NAMES[Number(r.month)-1]} ${r.year}`;};
             const ap=document.getElementById('aeSavedPeriod'),tp=document.getElementById('tassSavedPeriod');if(ap)ap.textContent=latest(aeRecords);if(tp)tp.textContent=latest(tassRecords);
         }
@@ -1764,7 +1542,6 @@
             refreshDashboard();
             renderAETable();
             renderTAssTable();
-            renderCBTOTable();
         }
 
         /**
@@ -1786,10 +1563,6 @@
                 if (r.municipality) munis.add(r.municipality);
             });
 
-            cbtoRecords.forEach(r => {
-                if (r.municipality) munis.add(r.municipality);
-            });
-
             const sortedYears = Array.from(years).sort((a,b) => b - a);
             const sortedMunis = Array.from(munis).sort();
             const sortedTypes = Array.from(aeTypes).sort();
@@ -1806,7 +1579,7 @@
             });
 
             // Populate Municipality Selects
-            ['dashMuni', 'filterAEMuni', 'filterTAssMuni', 'filterCBTOMuni', 'rptMonthlyMuni', 'topAEMuni', 'topTAssMuni'].forEach(id => {
+            ['dashMuni', 'filterAEMuni', 'filterTAssMuni', 'rptMonthlyMuni', 'topAEMuni', 'topTAssMuni'].forEach(id => {
                 const select = document.getElementById(id);
                 if (!select) return;
                 const currVal = select.value;
@@ -2328,158 +2101,6 @@
         }
 
         /**
-         * SECTION 3B: COMMUNITY-BASED TOURISM ORGANIZATIONS (CBTOs) CRUD
-         * CBTOs are an organization registry, not a periodic report - there is
-         * no Year/Month. Records are uniquely identified by Municipality/City
-         * + Complete Name of CBTO.
-         */
-        function renderCBTOTable() {
-            const searchEl = document.getElementById('filterCBTOSearch');
-            const muniEl = document.getElementById('filterCBTOMuni');
-            const search = searchEl ? searchEl.value.toLowerCase() : '';
-            const muni = muniEl ? muniEl.value : 'ALL';
-
-            const filtered = cbtoRecords.filter(r => {
-                if (muni !== 'ALL' && r.municipality !== muni) return false;
-                if (search) {
-                    const matchStr = `${r.cbto_name} ${r.municipality} ${r.contact_person} ${r.address}`.toLowerCase();
-                    if (!matchStr.includes(search)) return false;
-                }
-                return true;
-            });
-
-            const countEl = document.getElementById('cbtoRecordCount');
-            if (countEl) countEl.innerText = filtered.length;
-            const tbody = document.getElementById('cbtoTableBody');
-            if (!tbody) return;
-
-            if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="12" class="p-6 text-center text-slate-400">No CBTO records found.</td></tr>`;
-                return;
-            }
-
-            let html = '';
-            filtered.forEach(r => {
-                const total = Number(r.male_members||0) + Number(r.female_members||0);
-                html += `<tr class="hover:bg-slate-50 border-b">
-                    <td class="p-3 font-bold text-slate-800">${r.municipality}</td>
-                    <td class="p-3 font-bold text-slate-800">${r.cbto_name}</td>
-                    <td class="p-3 max-w-xs">${r.purpose || ''}</td>
-                    <td class="p-3 max-w-xs">${r.nature_of_activity || ''}</td>
-                    <td class="p-3 max-w-xs">${r.address || ''}</td>
-                    <td class="p-3">${r.contact_person || ''}</td>
-                    <td class="p-3">${r.contact_number || ''}</td>
-                    <td class="p-3">${r.email || ''}</td>
-                    <td class="p-3 text-right">${Number(r.male_members||0).toLocaleString()}</td>
-                    <td class="p-3 text-right">${Number(r.female_members||0).toLocaleString()}</td>
-                    <td class="p-3 text-right font-bold bg-slate-50 text-slate-900">${total.toLocaleString()}</td>
-                    <td class="p-3 text-center space-x-1 whitespace-nowrap">
-                        <button onclick="editCBTORecord(${r.id})" class="text-blue-600 hover:text-blue-800 p-1"><i class="fa-solid fa-pen-to-square"></i></button>
-                        <button onclick="deleteCBTORecord(${r.id})" class="text-rose-600 hover:text-rose-800 p-1"><i class="fa-solid fa-trash"></i></button>
-                    </td>
-                </tr>`;
-            });
-
-            tbody.innerHTML = html;
-        }
-
-        function calcCBTOTotals() {
-            const m = Math.max(0, Number(document.getElementById('cbto_male').value || 0));
-            const f = Math.max(0, Number(document.getElementById('cbto_female').value || 0));
-            document.getElementById('cbto_calc_total').innerText = (m + f).toLocaleString();
-        }
-
-        async function saveCBTORecord(e) {
-            e.preventDefault();
-            const id = document.getElementById('cbto_id').value;
-            const muni = document.getElementById('cbto_municipality').value.trim();
-            const name = document.getElementById('cbto_name').value.trim();
-            const male = Math.max(0, Number(document.getElementById('cbto_male').value || 0));
-            const female = Math.max(0, Number(document.getElementById('cbto_female').value || 0));
-
-            const record = {
-                municipality: muni,
-                cbto_name: name,
-                purpose: document.getElementById('cbto_purpose').value.trim(),
-                nature_of_activity: document.getElementById('cbto_nature').value.trim(),
-                address: document.getElementById('cbto_address').value.trim(),
-                contact_person: document.getElementById('cbto_contact_person').value.trim(),
-                contact_number: document.getElementById('cbto_contact_number').value.trim(),
-                email: document.getElementById('cbto_email').value.trim(),
-                male_members: male,
-                female_members: female,
-                total_members: male + female
-            };
-
-            // Unique key check logic (Municipality + Complete Name of CBTO)
-            const existing = cbtoRecords.find(r =>
-                r.municipality.toLowerCase() === muni.toLowerCase() &&
-                r.cbto_name.toLowerCase() === name.toLowerCase() &&
-                (!id || r.id != id)
-            );
-
-            if (existing) {
-                if (id) {
-                    record.id = Number(id);
-                } else {
-                    record.id = existing.id;
-                    showToast(`Updated existing CBTO record for ${name} (${muni})`, "info");
-                }
-            } else if (id) {
-                record.id = Number(id);
-            }
-
-            const savedId = await putRecordToStore("cbtos", record);
-            record.id = record.id || savedId;
-            markDirty("cbtos", record.id);
-            try {
-                await setRecordToCloud("cbtos", record);
-                clearDirty("cbtos", [record.id]);
-                updateCloudStatus("Cloud Saved", true);
-            }
-            catch (cloudErr) { console.error(cloudErr); showToast("Local record saved, but cloud save failed: " + cloudErr.message, "warning"); }
-            await loadAllRecords();
-            closeModal('modalCBTO');
-            refreshAllViews();
-            showToast("CBTO record saved successfully.", "success");
-        }
-
-        function editCBTORecord(id) {
-            const r = cbtoRecords.find(x => x.id === id);
-            if (!r) return;
-            document.getElementById('cbto_id').value = r.id;
-            document.getElementById('cbto_municipality').value = r.municipality;
-            document.getElementById('cbto_name').value = r.cbto_name;
-            document.getElementById('cbto_purpose').value = r.purpose || '';
-            document.getElementById('cbto_nature').value = r.nature_of_activity || '';
-            document.getElementById('cbto_address').value = r.address || '';
-            document.getElementById('cbto_contact_person').value = r.contact_person || '';
-            document.getElementById('cbto_contact_number').value = r.contact_number || '';
-            document.getElementById('cbto_email').value = r.email || '';
-            document.getElementById('cbto_male').value = r.male_members;
-            document.getElementById('cbto_female').value = r.female_members;
-
-            calcCBTOTotals();
-            document.getElementById('modalCBTOTitle').innerText = "Edit CBTO Record";
-            openModal('modalCBTO');
-        }
-
-        async function deleteCBTORecord(id) {
-            if (confirm("Are you sure you want to delete this CBTO record?")) {
-                const record = cbtoRecords.find(x => x.id === id);
-                await deleteRecordFromStore("cbtos", id);
-                clearDirty("cbtos", [id]);
-                if (record) {
-                    try { await deleteRecordFromCloud("cbtos", record); }
-                    catch (cloudErr) { console.error(cloudErr); markPendingDelete("cbtos", record); showToast("Local deletion completed, but cloud deletion failed: " + cloudErr.message, "warning"); }
-                }
-                await loadAllRecords();
-                refreshAllViews();
-                showToast("CBTO record deleted.", "info");
-            }
-        }
-
-        /**
          * SECTION 4: BULK EXCEL UPLOAD IMPLEMENTATION WITH OVERWRITE RULE
          * Excel (.xlsx/.xls) is the standard import format.
          */
@@ -2879,172 +2500,6 @@
             }
         }
 
-        // Process CBTO Bulk Excel
-        //
-        // CBTO EXCEL UPLOAD FORMAT - exact expected columns:
-        // MUNICIPALITY | COMPLETE NAME OF CBTO | PURPOSE/ OBJECTIVE | NATURE OF
-        // ACTIVITY IN THE DESTINATION | COMPLETE ADDRESS | CONTACT PERSON AND
-        // DESIGNATION | CONTACT NUMBERS | EMAIL ADDRESS | No. of Male Members |
-        // No. of Female Members | TOTAL Members
-        // CBTOs are an organization registry (no Year/Month, unlike AEs/TAss).
-        // Rows are matched to existing records by Municipality/City + Complete
-        // Name of CBTO; a match updates that record, otherwise a new one is
-        // created. TOTAL Members is recalculated from Male + Female Members;
-        // if the upload includes its own total, a mismatch is reported as a
-        // warning rather than silently overwritten.
-        async function processCBTOBulkExcel() {
-            const fileInput = document.getElementById('bulkCBTOFile');
-            if (!fileInput.files.length) { showToast("Please select an Excel file.", "warning"); return; }
-
-            try {
-                const rows = await readExcelFile(fileInput.files[0]);
-                if (rows.length < 2) { showToast("Excel file is empty or missing data rows.", "warning"); return; }
-
-                const headers = rows[0].map(normalizeExcelHeader);
-                pendingBulkCBTO = [];
-                document.getElementById('btnSaveBulkCBTO').disabled = true;
-                document.getElementById('btnConfirmBulkCBTO').disabled = true;
-                let newCount = 0, updateCount = 0, skippedCount = 0;
-                const errors = [];
-
-                for (let i = 1; i < rows.length; i++) {
-                    const row = rows[i];
-                    if (!row || row.every(v => String(v ?? '').trim() === '')) continue;
-
-                    const muni = rowValue(row, headers, ['Municipality', 'Municipality/City'], 0);
-                    const name = rowValue(row, headers, ['Complete Name of CBTO', 'Name of CBTO', 'CBTO'], 1);
-                    const purpose = rowValue(row, headers, ['Purpose/ Objective', 'Purpose/Objective', 'Purpose', 'Objective'], 2);
-                    const nature = rowValue(row, headers, ['Nature of Activity in the Destination', 'Nature of Activity'], 3);
-                    const address = rowValue(row, headers, ['Complete Address', 'Address'], 4);
-                    const contactPerson = rowValue(row, headers, ['Contact Person and Designation', 'Contact Person'], 5);
-                    const contactNumber = rowValue(row, headers, ['Contact Numbers', 'Contact Number'], 6);
-                    const email = rowValue(row, headers, ['Email Address', 'Email'], 7);
-                    const male = parseInt(rowValue(row, headers, ['No. of Male Members', 'Male Members'], 8)) || 0;
-                    const female = parseInt(rowValue(row, headers, ['No. of Female Members', 'Female Members'], 9)) || 0;
-
-                    if (!muni || !name) {
-                        errors.push(`Row ${i+1}: Missing/invalid Municipality or Complete Name of CBTO.`);
-                        skippedCount++;
-                        continue;
-                    }
-
-                    const total_members = male + female;
-                    const uploadedTotal = rowValueIfPresent(row, headers, ['TOTAL Members', 'Total Members', 'Total']);
-                    if (uploadedTotal.present && Number(uploadedTotal.value) !== total_members) {
-                        errors.push(`Row ${i+1}: Uploaded "TOTAL Members" (${uploadedTotal.value}) does not match Male+Female Members (${total_members}). Recalculated value was used.`);
-                    }
-
-                    const record = {
-                        municipality: String(muni).trim(),
-                        cbto_name: String(name).trim(),
-                        purpose: String(purpose || '').trim(),
-                        nature_of_activity: String(nature || '').trim(),
-                        address: String(address || '').trim(),
-                        contact_person: String(contactPerson || '').trim(),
-                        contact_number: String(contactNumber || '').trim(),
-                        email: String(email || '').trim(),
-                        male_members: male,
-                        female_members: female,
-                        total_members: total_members
-                    };
-
-                    const existing = cbtoRecords.find(r =>
-                        r.municipality.toLowerCase() === record.municipality.toLowerCase() &&
-                        r.cbto_name.toLowerCase() === record.cbto_name.toLowerCase()
-                    );
-
-                    if (existing) {
-                        pendingBulkCBTO.push({ record, isUpdate: true, existingId: existing.id });
-                        updateCount++;
-                    } else {
-                        pendingBulkCBTO.push({ record, isUpdate: false });
-                        newCount++;
-                    }
-                }
-
-                document.getElementById('bulkCBTONewCount').innerText = newCount;
-                document.getElementById('bulkCBTOUpdateCount').innerText = updateCount;
-                document.getElementById('bulkCBTOSkippedCount').innerText = skippedCount;
-                document.getElementById('bulkCBTOSummary').classList.remove('hidden');
-
-                const previewBody = document.getElementById('bulkCBTOPreviewBody');
-                previewBody.innerHTML = '';
-                pendingBulkCBTO.slice(0, 50).forEach(item => {
-                    const r = item.record;
-                    previewBody.innerHTML += `<tr class="border-b">
-                        <td class="p-2 font-bold ${item.isUpdate ? 'text-amber-600' : 'text-emerald-600'}">${item.isUpdate ? 'UPDATE' : 'NEW'}</td>
-                        <td class="p-2">${r.municipality}</td>
-                        <td class="p-2 font-semibold">${r.cbto_name}</td>
-                        <td class="p-2">${r.contact_person}</td>
-                        <td class="p-2">${r.male_members}</td>
-                        <td class="p-2">${r.female_members}</td>
-                        <td class="p-2 font-bold">${r.total_members}</td>
-                        <td class="p-2 text-slate-400">Valid</td>
-                    </tr>`;
-                });
-                document.getElementById('bulkCBTOPreviewContainer').classList.remove('hidden');
-
-                if (errors.length) {
-                    const errBox = document.getElementById('bulkCBTOErrorLog');
-                    errBox.classList.remove('hidden');
-                    errBox.innerHTML = `<strong>Import Warning Log (${errors.length}):</strong><br>` + errors.join('<br>');
-                } else {
-                    document.getElementById('bulkCBTOErrorLog').classList.add('hidden');
-                }
-                document.getElementById('btnConfirmBulkCBTO').disabled = false;
-                document.getElementById('btnSaveBulkCBTO').disabled = false;
-            } catch (err) {
-                console.error(err);
-                showToast("Failed to read Excel file: " + err.message, "danger");
-            }
-        }
-
-        async function commitCBTOBulkImport() {
-            if (!pendingBulkCBTO.length) {
-                showToast("No valid CBTO records are ready for import. Click Process Excel first and check the preview/errors.", "warning");
-                return;
-            }
-            try {
-                const importCount = pendingBulkCBTO.length;
-                const newCount = pendingBulkCBTO.filter(i => !i.isUpdate).length;
-                const updateCount = pendingBulkCBTO.filter(i => i.isUpdate).length;
-                const message = `This will save ${importCount.toLocaleString()} CBTO record(s): ${newCount.toLocaleString()} new, ${updateCount.toLocaleString()} updated (matched by Municipality/City + Complete Name of CBTO).\n\nContinue?`;
-                if (!confirm(message)) return;
-
-                const recordsToSave = pendingBulkCBTO.map(item => {
-                    const rec = { ...item.record };
-                    if (item.isUpdate) rec.id = item.existingId;
-                    return rec;
-                });
-
-                const savedIds = await putRecordsBulk("cbtos", recordsToSave);
-                recordsToSave.forEach((rec, idx) => { rec.id = rec.id || savedIds[idx]; markDirty("cbtos", rec.id); });
-
-                const updatedIds = new Set(recordsToSave.map(r => r.id));
-                const retained = cbtoRecords.filter(r => !updatedIds.has(r.id));
-                cbtoRecords.splice(0, cbtoRecords.length, ...retained, ...recordsToSave);
-
-                try {
-                    await saveRecordsToCloud("cbtos", recordsToSave);
-                    clearDirty("cbtos", recordsToSave.map(r => r.id));
-                    updateCloudStatus("Cloud Saved", true);
-                } catch (cloudErr) {
-                    console.error(cloudErr);
-                    showToast("Records saved locally, but cloud sync failed: " + cloudErr.message, "warning");
-                }
-
-                pendingBulkCBTO = [];
-                document.getElementById('btnSaveBulkCBTO').disabled = true;
-                document.getElementById('btnConfirmBulkCBTO').disabled = true;
-                closeModal('modalBulkCBTO');
-                refreshAllViews();
-                showToast(`CBTO import complete. ${importCount.toLocaleString()} records saved (${newCount.toLocaleString()} new, ${updateCount.toLocaleString()} updated).`, "success");
-            } catch (err) {
-                console.error(err);
-                showToast("Unable to save CBTO data: " + err.message, "danger");
-            }
-        }
-
         /**
          * SECTION 5: ANNUAL SUMMARY REPORT GENERATION
          */
@@ -3388,11 +2843,8 @@
             const aeRows = aeRecords.map(r => [r.id||'',r.province,r.municipality,r.year,MONTH_NAMES[r.month-1],r.establishment,r.type_class||'',Number(r.local_tourist||0),Number(r.foreign_tourist||0),Number(r.overseas_filipino||0),Number(r.total_lf||0),Number(r.total_male||0),Number(r.total_female||0),Number(r.total_mf||0)]);
             const taHeaders = ["ID","Province","Municipality","Year","Month","Tourist Attraction","TM(M)","TM(F)","TM(SUM)","OM(M)","OM(F)","OM(SUM)","FCR(M)","FCR(F)","FCR(SUM)","Total Male","Total Female","Grand Total"];
             const taRows = tassRecords.map(r => [r.id||'',r.province,r.municipality,r.year,MONTH_NAMES[r.month-1],r.attraction,Number(r.tm_m||0),Number(r.tm_f||0),Number(r.tm_sum||0),Number(r.om_m||0),Number(r.om_f||0),Number(r.om_sum||0),Number(r.fcr_m||0),Number(r.fcr_f||0),Number(r.fcr_sum||0),Number(r.total_male||0),Number(r.total_female||0),Number(r.grand_total||0)]);
-            const cbtoHeaders = ["ID","Municipality","Complete Name of CBTO","Purpose/ Objective","Nature of Activity in the Destination","Complete Address","Contact Person and Designation","Contact Numbers","Email Address","No. of Male Members","No. of Female Members","TOTAL Members"];
-            const cbtoRows = cbtoRecords.map(r => [r.id||'',r.municipality,r.cbto_name,r.purpose||'',r.nature_of_activity||'',r.address||'',r.contact_person||'',r.contact_number||'',r.email||'',Number(r.male_members||0),Number(r.female_members||0),Number(r.total_members||0)]);
             XLSX.utils.book_append_sheet(wb, makeDataSheet(aeHeaders, aeRows, [0,3,7,8,9,10,11,12,13]), "AEs");
             XLSX.utils.book_append_sheet(wb, makeDataSheet(taHeaders, taRows, [0,3,6,7,8,9,10,11,12,13,14,15,16,17]), "TAss");
-            XLSX.utils.book_append_sheet(wb, makeDataSheet(cbtoHeaders, cbtoRows, [0,9,10,11]), "CBTOs");
             XLSX.utils.book_append_sheet(wb, makeInfoSheet("Tourism Data Banking System – Full Database Backup", "Do not edit sheet names or column headers if this workbook will be restored."), "Backup Info");
             saveWorkbook(wb, `TourismDB_Backup_${new Date().toISOString().slice(0,10)}.xlsx`);
             showToast("Excel database backup downloaded successfully.", "success");
@@ -3409,9 +2861,6 @@
 
                 const aeRows = XLSX.utils.sheet_to_json(workbook.Sheets["AEs"], { defval: "" });
                 const taRows = XLSX.utils.sheet_to_json(workbook.Sheets["TAss"], { defval: "" });
-                // CBTOs sheet is optional so older backups (taken before CBTOs
-                // existed) can still be restored without an error.
-                const cbtoRows = workbook.Sheets["CBTOs"] ? XLSX.utils.sheet_to_json(workbook.Sheets["CBTOs"], { defval: "" }) : [];
 
                 const aeRecs = aeRows.map(r => {
                     const rec = {
@@ -3439,31 +2888,14 @@
                     return rec;
                 });
 
-                const cbtoRecs = cbtoRows.map(r => {
-                    const male = Number(r["No. of Male Members"]||0), female = Number(r["No. of Female Members"]||0);
-                    const rec = {
-                        id: r.ID || undefined, municipality: r.Municipality,
-                        cbto_name: r["Complete Name of CBTO"], purpose: r["Purpose/ Objective"] || '',
-                        nature_of_activity: r["Nature of Activity in the Destination"] || '', address: r["Complete Address"] || '',
-                        contact_person: r["Contact Person and Designation"] || '', contact_number: r["Contact Numbers"] || '',
-                        email: r["Email Address"] || '', male_members: male, female_members: female,
-                        total_members: Number(r["TOTAL Members"]) || (male + female)
-                    };
-                    if (rec.id === undefined || rec.id === "") delete rec.id;
-                    return rec;
-                });
-
                 // Single-transaction bulk replace instead of one awaited
                 // transaction per row - restores in a fraction of the time.
                 await clearAndBulkPut("aes", aeRecs);
                 await clearAndBulkPut("tass", tassRecs);
-                await clearAndBulkPut("cbtos", cbtoRecs);
                 pendingSync.aes.clear();
                 pendingSync.tass.clear();
-                pendingSync.cbtos.clear();
                 pendingDeletes.aes = [];
                 pendingDeletes.tass = [];
-                pendingDeletes.cbtos = [];
                 persistPendingSync();
 
                 await loadAllRecords();
@@ -3502,26 +2934,6 @@
             XLSX.utils.book_append_sheet(wb, makeDataSheet(headers,[sample],[2,5,6,7,8,9,10,11,12,13,14,15,16]),"TAss Data");
             XLSX.utils.book_append_sheet(wb, makeInfoSheet("TAss Excel Upload Template","Enter one record per row. Month must be numeric (January=1 ... December=12); month names are also accepted. Year must be a 4-digit number. SUM/Total/Grand Total columns are recalculated by the system - you may leave them blank or fill them in for reference, but do not enter formulas."),"Instructions");
             saveWorkbook(wb, "Tourism_TAss_Excel_Upload_Template.xlsx");
-        }
-
-        function downloadCBTOTemplate() {
-            const headers = ["MUNICIPALITY","COMPLETE NAME OF CBTO","PURPOSE/ OBJECTIVE","NATURE OF ACTIVITY IN THE DESTINATION","COMPLETE ADDRESS","CONTACT PERSON AND DESIGNATION","CONTACT NUMBERS","EMAIL ADDRESS","No. of Male Members","No. of Female Members","TOTAL Members"];
-            const sample = ["Mamburao","Sample CBTO Association","Promote community-based tourism.","Tour guiding and homestay coordination.","Barangay Poblacion, Mamburao, Occidental Mindoro","Juan Dela Cruz, President","0917-000-0000","sample@example.com",0,0,0];
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, makeDataSheet(headers,[sample],[8,9,10]),"CBTOs Data");
-            XLSX.utils.book_append_sheet(wb, makeInfoSheet("CBTOs Excel Upload Template","Enter one record per row. Rows are matched to existing records by Municipality/City + Complete Name of CBTO - a match updates that record, otherwise a new one is created. TOTAL Members is recalculated by the system - you may leave it blank or fill it in for reference, but do not enter a formula."),"Instructions");
-            saveWorkbook(wb, "Tourism_CBTOs_Excel_Upload_Template.xlsx");
-        }
-
-        function exportCBTOsExcel() {
-            if (!cbtoRecords.length) { showToast("No CBTO records to export.", "warning"); return; }
-            const headers = ["MUNICIPALITY","COMPLETE NAME OF CBTO","PURPOSE/ OBJECTIVE","NATURE OF ACTIVITY IN THE DESTINATION","COMPLETE ADDRESS","CONTACT PERSON AND DESIGNATION","CONTACT NUMBERS","EMAIL ADDRESS","No. of Male Members","No. of Female Members","TOTAL Members"];
-            const rows = cbtoRecords.map(r => [r.municipality, r.cbto_name, r.purpose||'', r.nature_of_activity||'', r.address||'', r.contact_person||'', r.contact_number||'', r.email||'', Number(r.male_members||0), Number(r.female_members||0), Number(r.total_members||0)]);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, makeDataSheet(headers, rows, [8,9,10]), "CBTOs Data");
-            XLSX.utils.book_append_sheet(wb, makeInfoSheet("Community-Based Tourism Organizations (CBTOs)", `Export generated: ${new Date().toLocaleString()}`), "Info");
-            saveWorkbook(wb, `CBTOs_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
-            showToast("CBTO Excel export downloaded successfully.", "success");
         }
 
         function getAnnualReportRows(yr) {
