@@ -14,8 +14,9 @@
   <!-- Firebase SDKs (Compat version) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
-  <!-- Initialize Firebase & Firestore -->
+  <!-- Initialize Firebase, Firestore & Auth -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyAhfpg6aVJlazzuyelcPILDzEVtqdlBrKw",
@@ -28,6 +29,7 @@
 
     firebase.initializeApp(firebaseConfig);
     window.db = firebase.firestore();
+    window.auth = firebase.auth();
   </script>
 
   <!-- Application Styles -->
@@ -862,6 +864,11 @@
       accredHistory: [], status: "Active", statusOthers: "", year: "",
       tourlista: "No"
     };
+    const emptyAttraction = {
+      municipality: "", name: "", yearEstablished: "", selection: "Existing",
+      physicalCondition: "", declarationStatus: "", category: "", code: "",
+      remarks: "", latitude: "", longitude: ""
+    };
     // Tour Guides don't have rooms, employees, or a proprietor in the usual sense — those
     // fields are auto-filled with "N/A" and locked whenever the enterprise type is Tour Guides.
     function applyTourGuideAutoFields(obj){
@@ -1117,7 +1124,7 @@
       </div>);
     }
 
-    function EstablishmentViewInfo({item, onEdit, onClose}){
+    function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       if(!item) return null;
       const accredState = getAccredState(item);
       const latestAccred = latestAccredEntry(item);
@@ -1180,7 +1187,9 @@
 
         <div className="form-actions">
           <button className="btn" onClick={onClose}>Close</button>
-          <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit This Enterprise</button>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit This Enterprise</button>
+          )}
         </div>
       </div>);
     }
@@ -1278,7 +1287,7 @@
       </div>);
     }
 
-    function EstablishmentsSection({data, setData}){
+    function EstablishmentsSection({data, setData, isAdmin}){
       const [view, setView] = useState("dashboard");
       const [filters, setFilters] = useState({});
       const [modal, setModal] = useState(null);
@@ -1396,7 +1405,9 @@
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Enterprise</button>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Enterprise</button>
+          )}
         </div>
 
         {view==="dashboard" ? (
@@ -1552,10 +1563,14 @@
                           <button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFormDirty(false); setModal({mode:"view", item:d}); }}>
                             <Icon d={ICONS.eye} size={13} color="#1C6B6E" /> View Info
                           </button>
-                          <button className="btn btn-primary btn-sm" onClick={()=>{ setFormDirty(false); setModal({mode:"edit", item:d}); }}>
-                            <Icon d={ICONS.edit} size={13} color="#fff" /> Edit
-                          </button>
-                          <button className="btn-ghost" onClick={()=>setToDelete(d)} title="Delete"><Icon d={ICONS.trash} color="#A8442D" /></button>
+                          {isAdmin && (
+                            <>
+                              <button className="btn btn-primary btn-sm" onClick={()=>{ setFormDirty(false); setModal({mode:"edit", item:d}); }}>
+                                <Icon d={ICONS.edit} size={13} color="#fff" /> Edit
+                              </button>
+                              <button className="btn-ghost" onClick={()=>setToDelete(d)} title="Delete"><Icon d={ICONS.trash} color="#A8442D" /></button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1574,10 +1589,11 @@
               item={modal.item}
               onClose={()=>setModal(null)}
               onEdit={()=>{ setFormDirty(false); setModal({mode:"edit", item:modal.item}); }}
+              isAdmin={isAdmin}
             />
           </Modal>
         )}
-        {modal && (modal.mode==="edit" || modal.mode==="add") && (
+        {modal && isAdmin && (modal.mode==="edit" || modal.mode==="add") && (
           <Modal title={modal.mode==="edit" ? "Edit Enterprise" : "Add Enterprise"} onClose={requestCloseModal}>
             <EstablishmentForm
               key={modal.mode + (modal.item ? modal.item.id : "new")}
@@ -1603,7 +1619,7 @@
       </div>);
     }
 
-    function AttractionsSection({data, setData}){
+    function AttractionsSection({data, setData, isAdmin}){
       const [view, setView] = useState("dashboard");
       const [filters, setFilters] = useState({});
       const [modal, setModal] = useState(null);
@@ -1664,7 +1680,9 @@
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Attraction</button>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Attraction</button>
+          )}
         </div>
 
         {view==="dashboard" ? (
@@ -1730,8 +1748,12 @@
                       <td>{d.remarks || <span className="cell-sub">—</span>}</td>
                       <td>
                         <div style={{display:"flex",gap:10}}>
-                          <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
-                          <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
+                          {isAdmin && (
+                            <>
+                              <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
+                              <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1743,7 +1765,7 @@
           </div>
         )}
 
-        {modal && (
+        {modal && isAdmin && (
           <Modal title={modal.mode==="edit" ? "Edit Attraction" : "Add Attraction"} onClose={()=>setModal(null)}>
             <AttractionForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
           </Modal>
@@ -1754,7 +1776,7 @@
       </div>);
     }
 
-    function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, cloudError, onSave }){
+    function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, cloudError, onSave, isAdmin }){
       const fileRef = useRef(null);
 
       const handleExport = () => {
@@ -1820,14 +1842,62 @@
         <div className="grow"><b>Backup &amp; Submission:</b> Download the inventory as an Excel file to back up or submit to the national agency — fill it in (here or offline), then upload it back to bulk-add records instead of encoding one by one.
           <div style={{fontSize:12, color: cloudStatus==="error" ? "#A8442D" : "#5E6E6A", marginTop:4}}>{statusText}</div>
         </div>
-        <button className="btn btn-primary" onClick={onSave} disabled={cloudStatus==="saving"}><Icon d={ICONS.download} size={14} color="#fff" /> {cloudStatus==="saving" ? "Saving…" : "Save"}</button>
+        {isAdmin && (
+          <button className="btn btn-primary" onClick={onSave} disabled={cloudStatus==="saving"}><Icon d={ICONS.download} size={14} color="#fff" /> {cloudStatus==="saving" ? "Saving…" : "Save"}</button>
+        )}
         <button className="btn btn-outline-teal" onClick={handleExport}><Icon d={ICONS.download} size={14} color="#1C6B6E" /> Download Excel Backup</button>
-        <button className="btn btn-outline-gold" onClick={()=>fileRef.current.click()}><Icon d={ICONS.upload} size={14} color="#8A5F16" /> Upload Encoded Excel</button>
+        {isAdmin && (
+          <button className="btn btn-outline-gold" onClick={()=>fileRef.current.click()}><Icon d={ICONS.upload} size={14} color="#8A5F16" /> Upload Encoded Excel</button>
+        )}
         <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} />
       </div>);
     }
 
+    function LoginScreen() {
+      const [email, setEmail] = useState("");
+      const [password, setPassword] = useState("");
+      const [error, setError] = useState("");
+      const [loading, setLoading] = useState(false);
+
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setError("");
+        setLoading(true);
+        try {
+          await window.auth.signInWithEmailAndPassword(email, password);
+        } catch (err) {
+          setError(err.message || "Login failed");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="app" style={{maxWidth:420, marginTop:80}}>
+          <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
+          <h1 className="title" style={{fontSize:24}}>Sign in</h1>
+          <p className="subtitle">Enter your email and password to access the inventory.</p>
+          <form onSubmit={handleLogin} style={{marginTop:24}}>
+            <label className="field">
+              <span className="field-label">Email</span>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email" />
+            </label>
+            <label className="field">
+              <span className="field-label">Password</span>
+              <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password" />
+            </label>
+            {error && <div style={{color:"var(--danger)", fontSize:13, marginBottom:12}}>{error}</div>}
+            <button className="btn btn-primary" type="submit" disabled={loading} style={{width:"100%"}}>
+              {loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        </div>
+      );
+    }
+
     function App(){
+      const [user, setUser] = useState(null);
+      const [authReady, setAuthReady] = useState(false);
       const [tab, setTab] = useState("establishments");
       const [establishments, setEstablishments] = useState([]);
       const [attractions, setAttractions] = useState([]);
@@ -1835,8 +1905,22 @@
       const [lastSaved, setLastSaved] = useState(null);
       const [cloudError, setCloudError] = useState("");
 
+      // Only this email can edit. Everyone else is view-only.
+      const ADMIN_EMAILS = ["rhyant13th@gmail.com"];
+      const isAdmin = user && ADMIN_EMAILS.includes(user.email);
+
       useEffect(() => {
+        const unsub = window.auth.onAuthStateChanged(u => {
+          setUser(u);
+          setAuthReady(true);
+        });
+        return unsub;
+      }, []);
+
+      useEffect(() => {
+        if (!user) return;
         let cancelled = false;
+        setCloudStatus("loading");
         loadInventoryFromCloud().then(data => {
           if(cancelled) return;
           if(data){
@@ -1850,9 +1934,10 @@
           if(!cancelled){ setCloudStatus("error"); setCloudError(err && err.message ? err.message : "Unknown error."); }
         });
         return () => { cancelled = true; };
-      }, []);
+      }, [user]);
 
       const handleSave = async () => {
+        if (!isAdmin) return;
         setCloudStatus("saving");
         try {
           await saveInventoryToCloud(establishments, attractions);
@@ -1866,15 +1951,39 @@
         }
       };
 
+      const handleLogout = () => window.auth.signOut();
+
+      if (!authReady) {
+        return <div className="app" style={{textAlign:"center", paddingTop:100}}>Checking authentication…</div>;
+      }
+
+      if (!user) {
+        return <LoginScreen />;
+      }
+
       return (<div className="app">
-        <div className="eyebrow">PROVINCIAL TOURISM OFFICE-RYAN R. TAJONERA TOO II</div>
+        <div style={{display:"flex", justifyContent:"flex-end", alignItems:"center", gap:12, marginBottom:8}}>
+          <span style={{fontSize:13, color:"var(--subtext)"}}>
+            {user.email}{" "}
+            {isAdmin
+              ? <span className="pill pill-teal">Admin</span>
+              : <span className="pill pill-grey">Viewer</span>}
+          </span>
+          <button className="btn btn-sm" onClick={handleLogout}>Sign out</button>
+        </div>
+
+        <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
         <h1 className="title">Tourism Enterprise &amp; Attraction Inventory</h1>
-        <div className="subtitle">Data inventory management for provincial tourism establishments and natural/cultural attractions.</div>
+        <div className="subtitle">
+          Data inventory management for provincial tourism establishments and natural/cultural attractions.
+          {!isAdmin && <span style={{color:"var(--teal)", fontWeight:600}}> — You are in view-only mode</span>}
+        </div>
 
         <BackupToolbar
           establishments={establishments} attractions={attractions}
           setEstablishments={setEstablishments} setAttractions={setAttractions}
           cloudStatus={cloudStatus} lastSaved={lastSaved} cloudError={cloudError} onSave={handleSave}
+          isAdmin={isAdmin}
         />
 
         <div className="section-tabs">
@@ -1887,9 +1996,9 @@
         </div>
 
         {tab === "establishments" ? (
-          <EstablishmentsSection data={establishments} setData={setEstablishments} />
+          <EstablishmentsSection data={establishments} setData={setEstablishments} isAdmin={isAdmin} />
         ) : (
-          <AttractionsSection data={attractions} setData={setAttractions} />
+          <AttractionsSection data={attractions} setData={setAttractions} isAdmin={isAdmin} />
         )}
       </div>);
     }
