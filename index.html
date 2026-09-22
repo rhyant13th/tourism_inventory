@@ -637,6 +637,9 @@
     const ATTRACTION_STATUSES = ["Existing", "Potential", "Emerging"];
     const DECLARATION_STATUSES = ["Nationally Declared", "Locally Declared", "Registered", "Unregistered"];
 
+    // Only this email can edit/download. Everyone else is view-only.
+    const ADMIN_EMAILS = ["rhyant13th@gmail.com"];
+
     // ==================== UTILITY FUNCTIONS ====================
     function exportToExcel(data, fileName) {
       if (!data || data.length === 0) {
@@ -664,7 +667,7 @@
     }
 
     // ==================== FILTER AND EXPORT ====================
-    function FilteredDownload({ data, type }) {
+    function FilteredDownload({ data, type, isAdmin }) {
       const [filters, setFilters] = useState({});
       const [filteredData, setFilteredData] = useState(data);
 
@@ -694,6 +697,10 @@
       }, [filters, data, type]);
 
       const handleDownload = () => {
+        if (!isAdmin) {
+          alert("View-only access: downloading is restricted to the administrator.");
+          return;
+        }
         if (filteredData.length === 0) {
           alert("No data matches your filters");
           return;
@@ -852,9 +859,15 @@
           </div>
 
           <div className="filter-actions">
-            <button className="btn btn-download" onClick={handleDownload}>
-              📥 Download ({filteredData.length} records)
-            </button>
+            {isAdmin ? (
+              <button className="btn btn-download" onClick={handleDownload}>
+                📥 Download ({filteredData.length} records)
+              </button>
+            ) : (
+              <span style={{ fontSize: 13, color: "#8a5a00", fontStyle: "italic" }}>
+                🔒 View-only access — downloading is disabled for your account.
+              </span>
+            )}
             <button className="btn" onClick={clearFilters}>
               🔄 Clear Filters
             </button>
@@ -864,7 +877,7 @@
     }
 
     // ==================== ENHANCED DASHBOARD ====================
-    function EnterprisesDashboard({ data }) {
+    function EnterprisesDashboard({ data, isAdmin }) {
       const byMunicipality = useMemo(() => {
         const m = {};
         data.forEach(d => { m[d.municipality] = (m[d.municipality] || 0) + 1; });
@@ -949,7 +962,7 @@
             </div>
           )}
 
-          <FilteredDownload data={data} type="enterprises" />
+          <FilteredDownload data={data} type="enterprises" isAdmin={isAdmin} />
 
           <div className="charts-grid">
             <div className="panel">
@@ -1008,7 +1021,7 @@
     }
 
     // ==================== ATTRACTIONS DASHBOARD ====================
-    function AttractionsDashboard({ data }) {
+    function AttractionsDashboard({ data, isAdmin }) {
       const byMunicipality = useMemo(() => {
         const m = {};
         data.forEach(d => { m[d.municipality] = (m[d.municipality] || 0) + 1; });
@@ -1067,7 +1080,7 @@
             </div>
           </div>
 
-          <FilteredDownload data={data} type="attractions" />
+          <FilteredDownload data={data} type="attractions" isAdmin={isAdmin} />
 
           <div className="charts-grid">
             <div className="panel">
@@ -1135,6 +1148,13 @@
       const [tab, setTab] = useState("enterprises");
       const [establishments, setEstablishments] = useState([]);
       const [attractions, setAttractions] = useState([]);
+      const [loginEmail, setLoginEmail] = useState("");
+      const [loginPassword, setLoginPassword] = useState("");
+      const [loginError, setLoginError] = useState("");
+      const [loginLoading, setLoginLoading] = useState(false);
+
+      // Only this email can edit/download. Everyone else is view-only.
+      const isAdmin = !!(user && ADMIN_EMAILS.includes(user.email));
 
       useEffect(() => {
         const unsub = window.auth.onAuthStateChanged(u => {
@@ -1143,6 +1163,21 @@
         });
         return unsub;
       }, []);
+
+      const handleSignIn = (e) => {
+        e.preventDefault();
+        setLoginError("");
+        if (!loginEmail || !loginPassword) {
+          setLoginError("Please enter both email and password.");
+          return;
+        }
+        setLoginLoading(true);
+        window.auth.signInWithEmailAndPassword(loginEmail, loginPassword)
+          .catch(err => {
+            setLoginError(err.message || "Sign in failed. Please check your credentials.");
+          })
+          .finally(() => setLoginLoading(false));
+      };
 
       useEffect(() => {
         if (!user) return;
@@ -1167,9 +1202,38 @@
             <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
             <h1 className="title" style={{ fontSize: 24 }}>Sign in</h1>
             <p className="subtitle">Enter credentials to access the advanced dashboard.</p>
-            <button className="btn btn-primary" onClick={() => alert("Please use your configured Firebase credentials")} style={{ width: "100%", marginTop: 24 }}>
-              Sign in
-            </button>
+            <form onSubmit={handleSignIn} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className="filter-field">
+                <label className="filter-label">Email</label>
+                <input
+                  type="email"
+                  className="filter-input"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="username"
+                  required
+                />
+              </div>
+              <div className="filter-field">
+                <label className="filter-label">Password</label>
+                <input
+                  type="password"
+                  className="filter-input"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+              {loginError && (
+                <div className="alert-box danger" style={{ margin: 0 }}>{loginError}</div>
+              )}
+              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={loginLoading}>
+                {loginLoading ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
           </div>
         );
       }
@@ -1182,7 +1246,12 @@
               <h1 className="title">Advanced Tourism Dashboard</h1>
               <p className="subtitle">Analytics & Smart Download Filters by <strong>RYAN R. TAJONERA</strong>, Tourism Operations Officer II</p>
             </div>
-            <button className="btn" onClick={handleLogout}>Sign out</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 13, color: isAdmin ? "#0E3B3C" : "#8a5a00" }}>
+                {user.email} · {isAdmin ? "Admin" : "View only"}
+              </span>
+              <button className="btn" onClick={handleLogout}>Sign out</button>
+            </div>
           </div>
 
           <div className="section-tabs">
@@ -1194,8 +1263,8 @@
             </button>
           </div>
 
-          {tab === "enterprises" && <EnterprisesDashboard data={establishments} />}
-          {tab === "attractions" && <AttractionsDashboard data={attractions} />}
+          {tab === "enterprises" && <EnterprisesDashboard data={establishments} isAdmin={isAdmin} />}
+          {tab === "attractions" && <AttractionsDashboard data={attractions} isAdmin={isAdmin} />}
         </div>
       );
     }
