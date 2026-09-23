@@ -119,6 +119,18 @@
     .pill-gold { background: var(--gold-soft); color: #8A5F16; }
     .pill-danger { background: var(--danger-soft); color: var(--danger); }
     .pill-grey { background: #EDEFEE; color: var(--subtext); }
+    .pill-navy { background: #E4E9E8; color: var(--navy-deep); }
+
+    /* --- Directory section (additive only — does not change existing rules above) --- */
+    .directory-search { position: relative; margin-bottom: 12px; }
+    .directory-search .search-icon { position: absolute; left: 12px; top: 12px; font-size: 13px; color: var(--subtext); }
+    .directory-search input { padding: 10px 12px 10px 30px; font-size: 14px; }
+    .directory-banner { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
+    .directory-banner.success { color: var(--success); background: var(--teal-soft); }
+    .directory-banner.error { color: var(--danger); background: var(--danger-soft); }
+    .directory-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--subtext); }
+    .directory-table-scroll { max-height: 560px; overflow: auto; }
+    .directory-table-scroll thead tr th { position: sticky; top: 0; z-index: 1; }
 
     input[type=text], input[type=date], input, select {
       width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; color: var(--text); background: #fff; outline: none; font-family: inherit;
@@ -551,6 +563,104 @@
       "Declaration Status","Attraction Category","Attraction Code","Code Description",
       "Remarks/Description","Latitude","Longitude",
     ];
+    const CBTO_HEADERS = [
+      "No.","Municipality","Name and Address of CBTO","Contact Person and Number",
+      "Number of Male Members","Number of Female Members","Total Members",
+      "Nature of Activity in the Destination","Purpose/Objective",
+    ];
+    function cbtoTotalMembers(d){
+      return (Number(d.maleMembers)||0) + (Number(d.femaleMembers)||0);
+    }
+    function buildCbtoRows(list){
+      return list.map((d,i)=>[
+        i+1, d.municipality||"", d.nameAddress||"", d.contactPersonNumber||"",
+        d.maleMembers||"", d.femaleMembers||"", cbtoTotalMembers(d),
+        d.natureOfActivity||"", d.purpose||"",
+      ]);
+    }
+    function parseCbtoRow(row){
+      const municipality = matchFromList(row["Municipality"], MUNICIPALITIES);
+      const nameAddress = String(row["Name and Address of CBTO"]||"").trim();
+      if(!nameAddress || !municipality) return null;
+      return {
+        municipality, nameAddress,
+        contactPersonNumber: String(row["Contact Person and Number"]||"").trim(),
+        maleMembers: String(row["Number of Male Members"]||"").trim(),
+        femaleMembers: String(row["Number of Female Members"]||"").trim(),
+        natureOfActivity: String(row["Nature of Activity in the Destination"]||"").trim(),
+        purpose: String(row["Purpose/Objective"]||"").trim(),
+      };
+    }
+
+    // ---- Directory (formerly "Tourism Officers Directory") ----
+    // General directory of tourism-related personnel: elected officials, PTC members,
+    // department heads, tourism officers, and others — organized by year.
+    const DIRECTORY_CATEGORIES = ["Elected Official","PTC Member","Department Head","Tourism Officer","Others"];
+    const DIRECTORY_STATUSES = ["Active","Inactive"];
+    const DIRECTORY_HEADERS = [
+      "No.","Province/City","Municipality","Name","Position/Designation","Office/Agency",
+      "Contact Number","Email Address","Category","Year","Status",
+    ];
+    // Legacy officer records (year, level, lguName, officerName, lceName, lceEmail, ...) are
+    // migrated into the new field names here, non-destructively — original fields are kept on
+    // the record (via spread) in case they're still needed, and existing officer entries are
+    // classified as "Tourism Officer" per the migration requirement.
+    function normalizeDirectoryRecord(d){
+      const base = d || {};
+      const name = base.name !== undefined && base.name !== "" ? base.name : (base.officerName || "");
+      const municipality = base.municipality !== undefined && base.municipality !== "" ? base.municipality : (base.lguName || "");
+      const category = DIRECTORY_CATEGORIES.includes(base.category) ? base.category : "Tourism Officer";
+      const status = DIRECTORY_STATUSES.includes(base.status) ? base.status : "Active";
+      return {
+        ...base,
+        provinceCity: base.provinceCity || "",
+        municipality,
+        name,
+        position: base.position || "",
+        officeAgency: base.officeAgency || "",
+        contact: base.contact || "",
+        email: base.email || "",
+        category,
+        year: base.year || "",
+        status,
+      };
+    }
+    function buildDirectoryRows(list){
+      return list.map((d,i)=>[
+        i+1, d.provinceCity||"", d.municipality||"", d.name||"", d.position||"", d.officeAgency||"",
+        d.contact||"", d.email||"", d.category||"", d.year||"", d.status||"",
+      ]);
+    }
+    function parseDirectoryRow(row){
+      const name = String(row["Name"]||"").trim();
+      const year = String(row["Year"]||"").trim();
+      if(!name || !year) return null;
+      const category = matchFromList(row["Category"], DIRECTORY_CATEGORIES);
+      const status = matchFromList(row["Status"], DIRECTORY_STATUSES);
+      return {
+        provinceCity: String(row["Province/City"]||"").trim(),
+        municipality: matchFromList(row["Municipality"], MUNICIPALITIES) || String(row["Municipality"]||"").trim(),
+        name,
+        position: String(row["Position/Designation"]||"").trim(),
+        officeAgency: String(row["Office/Agency"]||"").trim(),
+        contact: String(row["Contact Number"]||"").trim(),
+        email: String(row["Email Address"]||"").trim(),
+        category: DIRECTORY_CATEGORIES.includes(category) ? category : "Others",
+        year,
+        status: DIRECTORY_STATUSES.includes(status) ? status : "Active",
+      };
+    }
+    // Duplicate check per spec: same Name + Municipality + Year + Category (name compared
+    // fuzzily so near-identical spellings are still flagged).
+    function findPossibleDirectoryDuplicates(f, list, excludeId){
+      return (list||[]).filter(d =>
+        d.id!==excludeId &&
+        String(d.municipality||"").toLowerCase()===String(f.municipality||"").toLowerCase() &&
+        String(d.year||"").toLowerCase()===String(f.year||"").toLowerCase() &&
+        String(d.category||"")===String(f.category||"") &&
+        isSimilarName(d.name, f.name)
+      );
+    }
 
     function buildEstabRows(list){
       return list.map((d,i)=>{
@@ -735,9 +845,9 @@
       ]);
     }
 
-    async function saveInventoryToCloud(establishments, attractions){
+    async function saveInventoryToCloud(establishments, attractions, cbtos, officers){
       await withTimeout(CLOUD_DOC().set({
-        establishments, attractions,
+        establishments, attractions, cbtos: cbtos||[], officers: officers||[],
         updatedAt: new Date().toISOString(),
       }), 15000, "Saving");
     }
@@ -868,6 +978,15 @@
       municipality: "", name: "", yearEstablished: "", selection: "Existing",
       physicalCondition: "", declarationStatus: "", category: "", code: "",
       remarks: "", latitude: "", longitude: ""
+    };
+    const emptyCbto = {
+      municipality: "", nameAddress: "", contactPersonNumber: "",
+      maleMembers: "", femaleMembers: "", natureOfActivity: "", purpose: "",
+    };
+    const emptyDirectoryRecord = {
+      provinceCity: "", municipality: "", name: "", position: "", officeAgency: "",
+      contact: "", email: "", category: "Tourism Officer", year: String(new Date().getFullYear()),
+      status: "Active",
     };
     // Tour Guides don't have rooms, employees, or a proprietor in the usual sense — those
     // fields are auto-filled with "N/A" and locked whenever the enterprise type is Tour Guides.
@@ -1264,6 +1383,230 @@
       </div>);
     }
 
+    function CbtoForm({initial, onCancel, onSave}){
+      const [f, setF] = useState(initial || emptyCbto);
+      const set = (k) => (e) => {
+        const v = e && e.target ? e.target.value : e;
+        setF(prev=>({...prev, [k]: v}));
+      };
+      const submit = () => {
+        if(!f.municipality || !f.nameAddress){
+          alert("Please complete municipality and name/address of the CBTO.");
+          return;
+        }
+        onSave(f);
+      };
+      return (<div>
+        <div className="form-grid">
+          <Field label="Municipality" required>
+            <select value={f.municipality} onChange={set("municipality")}>
+              <option value="">Select municipality</option>
+              {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+          <Field label="Name and Address of CBTO" required><input type="text" value={f.nameAddress} onChange={set("nameAddress")} placeholder="e.g. Sablayan Fisherfolk Tourism Assoc., Brgy. Poblacion" /></Field>
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Contact Person and Number"><input type="text" value={f.contactPersonNumber} onChange={set("contactPersonNumber")} placeholder="e.g. Juan Dela Cruz, 0917-000-0000" /></Field>
+          </div>
+          <Field label="Number of Male Members"><input type="text" inputMode="numeric" value={f.maleMembers} onChange={set("maleMembers")} placeholder="0" /></Field>
+          <Field label="Number of Female Members"><input type="text" inputMode="numeric" value={f.femaleMembers} onChange={set("femaleMembers")} placeholder="0" /></Field>
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Total Members"><input type="text" value={cbtoTotalMembers(f)} disabled /></Field>
+          </div>
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Nature of Activity in the Destination"><input type="text" value={f.natureOfActivity} onChange={set("natureOfActivity")} placeholder="e.g. Guided boat tours, mangrove conservation" /></Field>
+          </div>
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Purpose / Objective"><input type="text" value={f.purpose} onChange={set("purpose")} placeholder="e.g. Livelihood generation for local fisherfolk" /></Field>
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="btn" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit}>Save CBTO</button>
+        </div>
+      </div>);
+    }
+
+    function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions}){
+      const [f, setF] = useState(() => normalizeDirectoryRecord(initial || emptyDirectoryRecord));
+      const [dupeWarning, setDupeWarning] = useState(null);
+      const set = (k) => (e) => {
+        const v = e && e.target ? e.target.value : e;
+        setF(prev=>({...prev, [k]: v}));
+      };
+
+      const finalizeSave = (cleaned) => onSave(cleaned);
+
+      const submit = () => {
+        if(!f.name || !f.municipality || !f.category || !f.year){
+          alert("Please complete name, municipality, category, and year.");
+          return;
+        }
+        const dupes = findPossibleDirectoryDuplicates(f, existingData, f.id);
+        if(dupes.length){
+          setDupeWarning(dupes);
+          return;
+        }
+        finalizeSave(f);
+      };
+      const confirmSaveAnyway = () => {
+        setDupeWarning(null);
+        finalizeSave(f);
+      };
+
+      if(dupeWarning){
+        return (<div>
+          <div style={{background:"var(--danger-soft)", border:"1px solid var(--danger)", borderRadius:10, padding:16}}>
+            <div style={{fontWeight:700, color:"var(--danger)", fontSize:15, marginBottom:6}}>Possible Duplicate Record</div>
+            <div style={{fontSize:13, color:"var(--text)", marginBottom:12}}>
+              A directory record with the same or similar name already exists for this municipality, year, and category. Please review before saving.
+            </div>
+            <div style={{background:"#fff", border:"1px solid var(--border)", borderRadius:8, overflow:"hidden"}}>
+              {dupeWarning.map(d=>(
+                <div key={d.id} style={{padding:"8px 12px", borderTop:"1px solid var(--border)"}}>
+                  <div style={{fontWeight:600, fontSize:13}}>{d.name} — {d.position || "No position on record"}</div>
+                  <div style={{fontSize:12, color:"var(--subtext)"}}>{d.municipality || "—"} · {d.year || "—"} · {d.category || "—"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="form-actions">
+            <button className="btn" onClick={()=>setDupeWarning(null)}>Cancel / Go Back</button>
+            <button className="btn btn-primary" onClick={confirmSaveAnyway}>Continue Saving Anyway</button>
+          </div>
+        </div>);
+      }
+
+      return (<div>
+        <div className="form-grid">
+          <Field label="Province/City"><input type="text" value={f.provinceCity} onChange={set("provinceCity")} placeholder="e.g. Occidental Mindoro" /></Field>
+          <Field label="Municipality" required>
+            <select value={f.municipality} onChange={set("municipality")}>
+              <option value="">Select municipality</option>
+              {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+          <Field label="Name" required><input type="text" value={f.name} onChange={set("name")} placeholder="Full name" /></Field>
+          <Field label="Position/Designation"><input type="text" value={f.position} onChange={set("position")} placeholder="e.g. Municipal Tourism Officer II" /></Field>
+          <Field label="Office/Agency">
+            <input type="text" list="directory-office-options" value={f.officeAgency} onChange={set("officeAgency")} placeholder="e.g. Municipal Tourism Office, MENRO, MSWDO" />
+            <datalist id="directory-office-options">
+              {(officeOptions||[]).map(o=><option key={o} value={o} />)}
+            </datalist>
+          </Field>
+          <Field label="Contact Number"><input type="text" value={f.contact} onChange={set("contact")} /></Field>
+          <Field label="Email Address"><input type="email" value={f.email} onChange={set("email")} /></Field>
+          <Field label="Category" required>
+            <select value={f.category} onChange={set("category")}>
+              {DIRECTORY_CATEGORIES.map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
+          </Field>
+          <Field label="Year" required><input type="text" inputMode="numeric" value={f.year} onChange={set("year")} placeholder="e.g. 2026" /></Field>
+          <Field label="Status">
+            <select value={f.status} onChange={set("status")}>
+              {DIRECTORY_STATUSES.map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div className="form-actions">
+          <button className="btn" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit}>Save Record</button>
+        </div>
+      </div>);
+    }
+
+    function directoryCategoryTone(category){
+      if(category==="Elected Official") return "gold";
+      if(category==="Department Head") return "navy";
+      if(category==="Others") return "grey";
+      return "teal"; // Tourism Officer, PTC Member
+    }
+    function DirectoryViewInfo({item, onEdit, onClose, isAdmin}){
+      if(!item) return null;
+      return (<div>
+        <div className="view-readonly-banner"><Icon d={ICONS.eye} size={14} color="#1C6B6E" /> Read-only view — no changes can be made here. Use Edit to modify this record.</div>
+        <div className="view-grid">
+          <ViewField label="Province/City" value={item.provinceCity} />
+          <ViewField label="Municipality" value={item.municipality} />
+          <ViewField label="Name" value={item.name} />
+          <ViewField label="Position/Designation" value={item.position} />
+          <ViewField label="Office/Agency" value={item.officeAgency} />
+          <ViewField label="Contact Number" value={item.contact} />
+          <ViewField label="Email Address" value={item.email} />
+          <ViewField label="Category" value={item.category} />
+          <ViewField label="Year" value={item.year} />
+          <ViewField label="Status" value={item.status} />
+        </div>
+        <div className="form-actions">
+          <button className="btn" onClick={onClose}>Close</button>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit This Record</button>
+          )}
+        </div>
+      </div>);
+    }
+
+    function SingleSheetToolbar({ title, sheetName, headers, buildRows, data, setData, parseRow, dedupeKey, idPrefix, isAdmin, filenamePrefix }){
+      const fileRef = useRef(null);
+
+      const handleExport = () => {
+        if (!isAdmin) { alert("View-only mode: only the admin can download data."); return; }
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...buildRows(data)]);
+        ws['!cols'] = headers.map(h => ({ wch: Math.max(14, h.length + 2) }));
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        XLSX.writeFile(wb, filenamePrefix + "-" + timestamp() + ".xlsx");
+      };
+
+      const handleFile = (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const wb = XLSX.read(evt.target.result, { type: "array", cellDates: true });
+            const rows = sheetToRows(wb, sheetName, headers);
+            const existingKeys = new Set(data.map(dedupeKey));
+            const toAdd = [];
+            let skipped = 0, dup = 0;
+            rows.forEach(row => {
+              const parsed = parseRow(row);
+              if(!parsed){ skipped++; return; }
+              const key = dedupeKey(parsed);
+              if(existingKeys.has(key)){ dup++; return; }
+              existingKeys.add(key);
+              toAdd.push({ ...parsed, id: idPrefix+"-import-"+Date.now()+"-"+Math.random().toString(36).slice(2,7) });
+            });
+            if(toAdd.length) setData(prev => [...prev, ...toAdd]);
+            alert(
+              title + " import complete.\n\n" +
+              "Added: " + toAdd.length + "\n" +
+              "Skipped (missing required fields): " + skipped + "\n" +
+              "Skipped (already in list): " + dup
+            );
+          } catch(err){
+            alert("Could not read this file. Please upload the .xlsx file with the original '" + sheetName + "' sheet, unedited headers.");
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      return (<div className="data-toolbar">
+        <div className="grow"><b>Backup &amp; Import:</b> {isAdmin
+          ? "Download this list as an Excel file to back up or edit offline, then upload it back to bulk-add records."
+          : "You are in view-only mode. Download and upload actions are available only to the administrator."}
+        </div>
+        {isAdmin && (
+          <button className="btn btn-outline-teal" onClick={handleExport}><Icon d={ICONS.download} size={14} color="#1C6B6E" /> Download Excel</button>
+        )}
+        {isAdmin && (
+          <button className="btn btn-outline-gold" onClick={()=>fileRef.current.click()}><Icon d={ICONS.upload} size={14} color="#8A5F16" /> Upload Excel</button>
+        )}
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} />
+      </div>);
+    }
+
     function FilterBar({filters, setFilters, options, fields}){
       const update = (k,v) => setFilters(prev=>({...prev, [k]: v}));
       return (<div className="filter-bar">
@@ -1418,6 +1761,7 @@
               <StatCard label="Not Active" value={data.filter(d=>d.status!=="Active").length} />
               <StatCard label="On TourLISTA" value={data.filter(d=>d.tourlista==="Yes").length} />
               <StatCard label="Total Employees" value={data.reduce((sum,d)=>sum+totalEmployees(d),0)} />
+              <StatCard label="Total Employees (TourLISTA-Registered)" value={data.filter(d=>d.tourlista==="Yes").reduce((sum,d)=>sum+totalEmployees(d),0)} />
               <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
             </div>
             <div className="charts-grid">
@@ -1776,6 +2120,339 @@
       </div>);
     }
 
+    function CbtoSection({data, setData, isAdmin}){
+      const [view, setView] = useState("dashboard");
+      const [filters, setFilters] = useState({});
+      const [modal, setModal] = useState(null);
+      const [toDelete, setToDelete] = useState(null);
+
+      const options = useMemo(()=>({ municipality: MUNICIPALITIES }), []);
+
+      const filtered = useMemo(()=>data.filter(d=>{
+        if(filters.nameAddress && !(d.nameAddress||"").toLowerCase().includes(filters.nameAddress.toLowerCase())) return false;
+        if(filters.municipality && d.municipality!==filters.municipality) return false;
+        return true;
+      }).sort((a,b)=>(a.municipality+a.nameAddress).localeCompare(b.municipality+b.nameAddress)), [data, filters]);
+
+      const byMunicipality = useMemo(()=>{
+        const m = {}; data.forEach(d=>{ m[d.municipality]=(m[d.municipality]||0)+1; });
+        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+      }, [data]);
+
+      const totalMale = data.reduce((s,d)=>s+(Number(d.maleMembers)||0),0);
+      const totalFemale = data.reduce((s,d)=>s+(Number(d.femaleMembers)||0),0);
+
+      const save = (f) => {
+        if(modal.mode==="edit"){
+          setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
+        } else {
+          setData(prev=>[...prev, {...f, id:"C-"+Date.now()}]);
+        }
+        setModal(null);
+      };
+      const handleDelete = () => {
+        setData(prev => prev.filter(d => d.id !== toDelete.id));
+        setToDelete(null);
+      };
+
+      return (<div>
+        <SingleSheetToolbar
+          title="CBTO" sheetName="CBTOs" headers={CBTO_HEADERS} buildRows={buildCbtoRows}
+          data={data} setData={setData} parseRow={parseCbtoRow}
+          dedupeKey={d=>(d.nameAddress+"|"+d.municipality).toLowerCase()}
+          idPrefix="C" isAdmin={isAdmin} filenamePrefix="CBTO-Directory"
+        />
+        <div className="toolbar-row">
+          <div className="view-toggle">
+            <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
+            <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
+          </div>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add CBTO</button>
+          )}
+        </div>
+
+        {view==="dashboard" ? (
+          <div>
+            <div className="stat-cards">
+              <StatCard label="Total CBTOs" value={data.length} />
+              <StatCard label="Total Members" value={totalMale+totalFemale} />
+              <StatCard label="Male Members" value={totalMale} />
+              <StatCard label="Female Members" value={totalFemale} />
+              <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
+            </div>
+            <div className="charts-grid">
+              <div className="panel span-2">
+                <div className="panel-title">CBTOs Per Municipality</div>
+                <BarList data={byMunicipality} color="#1C6B6E" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
+              {key:"nameAddress", label:"CBTO Name", type:"search", placeholder:"Search by name"},
+              {key:"municipality", label:"Municipality"},
+            ]} />
+            <div className="table-wrap">
+              <table>
+                <thead><tr>{["Municipality","Name and Address of CBTO","Contact Person and Number","Male","Female","Total Members","Nature of Activity","Purpose/Objective","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {filtered.map((d,i)=>(
+                    <tr key={d.id} className={i%2?"odd":""}>
+                      <td>{d.municipality}</td>
+                      <td>{d.nameAddress}</td>
+                      <td>{d.contactPersonNumber}</td>
+                      <td>{d.maleMembers}</td>
+                      <td>{d.femaleMembers}</td>
+                      <td>{cbtoTotalMembers(d)}</td>
+                      <td>{d.natureOfActivity}</td>
+                      <td>{d.purpose}</td>
+                      <td>
+                        <div className="actions-cell">
+                          {isAdmin && (<>
+                            <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
+                            <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
+                          </>)}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No CBTOs match these filters.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {modal && isAdmin && (
+          <Modal title={modal.mode==="edit" ? "Edit CBTO" : "Add CBTO"} onClose={()=>setModal(null)}>
+            <CbtoForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
+          </Modal>
+        )}
+        {toDelete && (
+          <ConfirmDialog text={'Delete "'+toDelete.nameAddress+'"? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={handleDelete} />
+        )}
+      </div>);
+    }
+
+    // Directory: general directory of tourism-related personnel (formerly "Tourism Officers
+    // Directory"). All records are non-destructively normalized via normalizeDirectoryRecord
+    // so existing officer entries keep working and display as "Tourism Officer".
+    function DirectorySection({data: rawData, setData, isAdmin}){
+      const data = useMemo(()=>rawData.map(normalizeDirectoryRecord), [rawData]);
+
+      const [view, setView] = useState("dashboard");
+      const [search, setSearch] = useState("");
+      const [filters, setFilters] = useState({});
+      const [modal, setModal] = useState(null);
+      const [toDelete, setToDelete] = useState(null);
+      const [page, setPage] = useState(1);
+      const [banner, setBanner] = useState(null);
+      const pageSize = 15;
+
+      const flashBanner = (type, text) => {
+        setBanner({type, text});
+        setTimeout(()=>setBanner(b => (b && b.text===text) ? null : b), 3500);
+      };
+
+      const options = useMemo(()=>({
+        provinceCity: [...new Set(data.map(d=>d.provinceCity).filter(Boolean))].sort(),
+        municipality: MUNICIPALITIES,
+        category: DIRECTORY_CATEGORIES,
+        officeAgency: [...new Set(data.map(d=>d.officeAgency).filter(Boolean))].sort(),
+        year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
+        status: DIRECTORY_STATUSES,
+      }), [data]);
+
+      const filtered = useMemo(()=>{
+        const q = search.trim().toLowerCase();
+        return data.filter(d=>{
+          if(filters.provinceCity && d.provinceCity!==filters.provinceCity) return false;
+          if(filters.municipality && d.municipality!==filters.municipality) return false;
+          if(filters.category && d.category!==filters.category) return false;
+          if(filters.officeAgency && d.officeAgency!==filters.officeAgency) return false;
+          if(filters.year && d.year!==filters.year) return false;
+          if(filters.status && d.status!==filters.status) return false;
+          if(q){
+            const hay = [d.name,d.position,d.officeAgency,d.contact,d.email].join(" ").toLowerCase();
+            if(!hay.includes(q)) return false;
+          }
+          return true;
+        }).sort((a,b)=>(String(b.year)+a.name).localeCompare(String(a.year)+b.name));
+      }, [data, filters, search]);
+
+      useEffect(()=>{ setPage(1); }, [filters, search, data.length]);
+
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      const pageClamped = Math.min(page, totalPages);
+      const paged = filtered.slice((pageClamped-1)*pageSize, pageClamped*pageSize);
+
+      const byMunicipality = useMemo(()=>{
+        const m = {}; filtered.forEach(d=>{ if(d.municipality) m[d.municipality]=(m[d.municipality]||0)+1; });
+        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+      }, [filtered]);
+      const byCategory = useMemo(()=>{
+        const m = {}; filtered.forEach(d=>{ m[d.category]=(m[d.category]||0)+1; });
+        return Object.entries(m).map(([name,value])=>({name,value}));
+      }, [filtered]);
+
+      const officeOptions = options.officeAgency;
+
+      const save = (f) => {
+        if(modal.mode==="edit"){
+          setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
+          flashBanner("success", "Record updated successfully.");
+        } else {
+          setData(prev=>[...prev, {...f, id:"DIR-"+Date.now()}]);
+          flashBanner("success", "Record added successfully.");
+        }
+        setModal(null);
+      };
+      const handleDelete = () => {
+        setData(prev => prev.filter(d => d.id !== toDelete.id));
+        setToDelete(null);
+        flashBanner("success", "Record deleted.");
+      };
+
+      const exportSubset = (list, label) => {
+        if (!isAdmin) { alert("View-only mode: only the admin can download data."); return; }
+        if (!list.length) { flashBanner("error", "No records to export for this selection."); return; }
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([DIRECTORY_HEADERS, ...buildDirectoryRows(list)]);
+        ws['!cols'] = DIRECTORY_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
+        XLSX.utils.book_append_sheet(wb, ws, "Directory");
+        XLSX.writeFile(wb, "Directory-" + label + "-" + timestamp() + ".xlsx");
+      };
+      const handleExportYear = () => {
+        if(!filters.year){ flashBanner("error", "Select a Year filter first to export that year's records."); return; }
+        exportSubset(data.filter(d=>d.year===filters.year), "Year-"+filters.year);
+      };
+
+      return (<div>
+        {banner && <div className={"directory-banner " + (banner.type==="error"?"error":"success")}>{banner.text}</div>}
+
+        <SingleSheetToolbar
+          title="Directory" sheetName="Directory" headers={DIRECTORY_HEADERS} buildRows={buildDirectoryRows}
+          data={data} setData={setData} parseRow={parseDirectoryRow}
+          dedupeKey={d=>(d.name+"|"+d.municipality+"|"+d.year+"|"+d.category).toLowerCase()}
+          idPrefix="DIR" isAdmin={isAdmin} filenamePrefix="Directory-All"
+        />
+
+        <div className="toolbar-row">
+          <div className="view-toggle">
+            <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
+            <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
+          </div>
+          <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+            {isAdmin && <button className="btn btn-outline-teal btn-sm" onClick={()=>exportSubset(filtered, "Filtered")}><Icon d={ICONS.download} size={13} color="#1C6B6E" /> Export Filtered</button>}
+            {isAdmin && <button className="btn btn-outline-teal btn-sm" onClick={handleExportYear}><Icon d={ICONS.download} size={13} color="#1C6B6E" /> Export Selected Year</button>}
+            {isAdmin && (
+              <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Record</button>
+            )}
+          </div>
+        </div>
+
+        <div className="directory-search search-wrap">
+          <span className="search-icon"><Icon d={ICONS.search} size={13} /></span>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search by name, position/designation, office/agency, contact number, or email address" />
+        </div>
+
+        <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
+          {key:"provinceCity", label:"Province/City"},
+          {key:"municipality", label:"Municipality"},
+          {key:"category", label:"Category"},
+          {key:"officeAgency", label:"Office/Agency"},
+          {key:"year", label:"Year"},
+          {key:"status", label:"Status"},
+        ]} />
+
+        <div className="stat-cards">
+          <StatCard label="Total Directory Records" value={filtered.length} />
+          <StatCard label="Active" value={filtered.filter(d=>d.status==="Active").length} />
+          <StatCard label="Inactive" value={filtered.filter(d=>d.status==="Inactive").length} />
+          <StatCard label="Tourism Officers" value={filtered.filter(d=>d.category==="Tourism Officer").length} />
+          <StatCard label="Elected Officials" value={filtered.filter(d=>d.category==="Elected Official").length} />
+          <StatCard label="Department Heads" value={filtered.filter(d=>d.category==="Department Head").length} />
+          <StatCard label="PTC Members" value={filtered.filter(d=>d.category==="PTC Member").length} />
+          <StatCard label="Others" value={filtered.filter(d=>d.category==="Others").length} />
+        </div>
+
+        {view==="dashboard" ? (
+          <div className="charts-grid">
+            <div className="panel">
+              <div className="panel-title">Per Municipality (current filters)</div>
+              <BarList data={byMunicipality} color="#1C6B6E" />
+            </div>
+            <div className="panel">
+              <div className="panel-title">Per Category (current filters)</div>
+              <Donut data={byCategory} total={filtered.length} />
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="table-wrap directory-table-scroll">
+              <table>
+                <thead><tr>{["Province/City","Municipality","Name","Position/Designation","Office/Agency","Contact Number","Email Address","Category","Year","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {paged.map((d,i)=>(
+                    <tr key={d.id} className={i%2?"odd":""}>
+                      <td>{d.provinceCity || <span className="cell-sub">—</span>}</td>
+                      <td>{d.municipality || <span className="cell-sub">—</span>}</td>
+                      <td style={{fontWeight:600}}>{d.name}</td>
+                      <td>{d.position || <span className="cell-sub">—</span>}</td>
+                      <td>{d.officeAgency || <span className="cell-sub">—</span>}</td>
+                      <td>{d.contact || <span className="cell-sub">—</span>}</td>
+                      <td>{d.email || <span className="cell-sub">—</span>}</td>
+                      <td><Pill tone={directoryCategoryTone(d.category)}>{d.category}</Pill></td>
+                      <td>{d.year}</td>
+                      <td><Pill tone={d.status==="Active"?"teal":"danger"}>{d.status}</Pill></td>
+                      <td>
+                        <div className="actions-cell">
+                          <button className="btn btn-outline-teal btn-sm" onClick={()=>setModal({mode:"view", item:d})}>
+                            <Icon d={ICONS.eye} size={13} color="#1C6B6E" /> View
+                          </button>
+                          {isAdmin && (<>
+                            <button className="btn btn-primary btn-sm" onClick={()=>setModal({mode:"edit", item:d})}>
+                              <Icon d={ICONS.edit} size={13} color="#fff" /> Edit
+                            </button>
+                            <button className="btn-ghost" onClick={()=>setToDelete(d)} title="Delete"><Icon d={ICONS.trash} color="#A8442D" /></button>
+                          </>)}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length===0 && <tr><td colSpan="11" className="empty-row">No directory records match these filters. Try adjusting your search or clearing filters.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length>0 && (
+              <div className="directory-pagination">
+                <span>Page {pageClamped} of {totalPages} · {filtered.length} record{filtered.length===1?"":"s"}</span>
+                <button className="btn btn-sm" disabled={pageClamped<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>Previous</button>
+                <button className="btn btn-sm" disabled={pageClamped>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {modal && modal.mode==="view" && (
+          <Modal title="Directory Record" onClose={()=>setModal(null)}>
+            <DirectoryViewInfo item={modal.item} onClose={()=>setModal(null)} onEdit={()=>setModal({mode:"edit", item:modal.item})} isAdmin={isAdmin} />
+          </Modal>
+        )}
+        {modal && isAdmin && (modal.mode==="edit" || modal.mode==="add") && (
+          <Modal title={modal.mode==="edit" ? "Edit Directory Record" : "Add Directory Record"} onClose={()=>setModal(null)}>
+            <DirectoryForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} existingData={data} officeOptions={officeOptions} />
+          </Modal>
+        )}
+        {toDelete && (
+          <ConfirmDialog text={'Delete the record for "'+toDelete.name+'" ('+(toDelete.municipality||"—")+', '+(toDelete.year||"—")+')? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={handleDelete} />
+        )}
+      </div>);
+    }
+
     function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, cloudError, onSave, isAdmin }){
       const fileRef = useRef(null);
 
@@ -1909,6 +2586,8 @@
       const [tab, setTab] = useState("establishments");
       const [establishments, setEstablishments] = useState([]);
       const [attractions, setAttractions] = useState([]);
+      const [cbtos, setCbtos] = useState([]);
+      const [officers, setOfficers] = useState([]);
       const [cloudStatus, setCloudStatus] = useState("loading");
       const [lastSaved, setLastSaved] = useState(null);
       const [cloudError, setCloudError] = useState("");
@@ -1934,6 +2613,8 @@
           if(data){
             setEstablishments((Array.isArray(data.establishments) ? data.establishments : []).map(d => ({...d, accredHistory: getAccredHistory(d)})));
             setAttractions(Array.isArray(data.attractions) ? data.attractions : []);
+            setCbtos(Array.isArray(data.cbtos) ? data.cbtos : []);
+            setOfficers(Array.isArray(data.officers) ? data.officers : []);
             if(data.updatedAt) setLastSaved(data.updatedAt);
           }
           setCloudStatus("idle");
@@ -1948,7 +2629,7 @@
         if (!isAdmin) return;
         setCloudStatus("saving");
         try {
-          await saveInventoryToCloud(establishments, attractions);
+          await saveInventoryToCloud(establishments, attractions, cbtos, officers);
           setLastSaved(new Date().toISOString());
           setCloudStatus("idle");
         } catch(err){
@@ -2001,12 +2682,25 @@
           <button className={"section-tab " + (tab==="attractions"?"active":"")} onClick={()=>setTab("attractions")}>
             Attractions ({attractions.length})
           </button>
+          <button className={"section-tab " + (tab==="cbtos"?"active":"")} onClick={()=>setTab("cbtos")}>
+            CBTOs ({cbtos.length})
+          </button>
+          <button className={"section-tab " + (tab==="officers"?"active":"")} onClick={()=>setTab("officers")}>
+            Directory ({officers.length})
+          </button>
         </div>
 
-        {tab === "establishments" ? (
+        {tab === "establishments" && (
           <EstablishmentsSection data={establishments} setData={setEstablishments} isAdmin={isAdmin} />
-        ) : (
+        )}
+        {tab === "attractions" && (
           <AttractionsSection data={attractions} setData={setAttractions} isAdmin={isAdmin} />
+        )}
+        {tab === "cbtos" && (
+          <CbtoSection data={cbtos} setData={setCbtos} isAdmin={isAdmin} />
+        )}
+        {tab === "officers" && (
+          <DirectorySection data={officers} setData={setOfficers} isAdmin={isAdmin} />
         )}
       </div>);
     }
