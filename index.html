@@ -121,7 +121,7 @@
     .pill-grey { background: #EDEFEE; color: var(--subtext); }
     .pill-navy { background: #E4E9E8; color: var(--navy-deep); }
 
-        /* --- Directory section (additive only — does not change existing rules above) --- */
+    /* --- Directory section (additive only — does not change existing rules above) --- */
     .directory-search { position: relative; margin-bottom: 12px; }
     .directory-search .search-icon { position: absolute; left: 12px; top: 12px; font-size: 13px; color: var(--subtext); }
     .directory-search input { padding: 10px 12px 10px 30px; font-size: 14px; }
@@ -129,37 +129,8 @@
     .directory-banner.success { color: var(--success); background: var(--teal-soft); }
     .directory-banner.error { color: var(--danger); background: var(--danger-soft); }
     .directory-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--subtext); }
-       /* Records flow continuously — no inner scrollbar; the whole page scrolls instead.
-       Fixed layout + equal columns so records fit the viewport with no horizontal scrollbar. */
-    .directory-table-scroll { overflow-x: visible; }
-    .directory-table-scroll table { table-layout: fixed; min-width: 0; width: 100%; }
-    .directory-table-scroll th, .directory-table-scroll td { overflow-wrap: break-word; word-break: break-word; white-space: normal; }
-
-    /* --- Layout polish (purely visual — no behaviour change) --- */
-    .app { padding: 28px 20px 72px; }
-    .section-tabs { gap: 10px; }
-    .section-tab { transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease; box-shadow: 0 1px 2px rgba(14,59,60,.04); }
-    .section-tab:hover:not(.active) { border-color: var(--teal); box-shadow: 0 2px 6px rgba(14,59,60,.08); }
-    .section-tab.active { box-shadow: 0 4px 12px rgba(14,59,60,.18); }
-
-    .btn { transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .05s ease; }
-    .btn:hover { box-shadow: 0 2px 8px rgba(14,59,60,.12); }
-    .btn:active { transform: translateY(1px); }
-    .btn-primary:hover { background: var(--teal); border-color: var(--teal); }
-
-    .panel { box-shadow: 0 1px 3px rgba(14,59,60,.05); }
-    .stat-card { box-shadow: 0 1px 3px rgba(14,59,60,.05); transition: box-shadow .15s ease, transform .15s ease; }
-    .stat-card:hover { box-shadow: 0 4px 14px rgba(14,59,60,.10); transform: translateY(-1px); }
-
-    .table-wrap { box-shadow: 0 1px 3px rgba(14,59,60,.05); }
-    table tbody tr { transition: background .12s ease; }
-    table tbody tr:hover { background: var(--teal-soft); }
-    thead tr th { letter-spacing: .02em; }
-
-    .data-toolbar { box-shadow: 0 1px 3px rgba(14,59,60,.05); }
-    .filter-bar { box-shadow: 0 1px 3px rgba(14,59,60,.05); }
-    .modal { animation: modalIn .16s ease-out; }
-    @keyframes modalIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .directory-table-scroll { max-height: 560px; overflow: auto; }
+    .directory-table-scroll thead tr th { position: sticky; top: 0; z-index: 1; }
 
     input[type=text], input[type=date], input, select {
       width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; color: var(--text); background: #fff; outline: none; font-family: inherit;
@@ -1154,11 +1125,11 @@
       return (<div>
         <div className="form-grid">
           <Field label="Name of Enterprise" required><input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Bayfront Hotel" /></Field>
-                    <Field label="Municipality" required>
-            <input type="text" list="directory-municipality-options" value={f.municipality} onChange={set("municipality")} placeholder="e.g. Mamburao, or any municipality/province" />
-            <datalist id="directory-municipality-options">
-              {MUNICIPALITIES.map(m=><option key={m} value={m} />)}
-            </datalist>
+          <Field label="Municipality" required>
+            <select value={f.municipality} onChange={set("municipality")}>
+              <option value="">Select municipality</option>
+              {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
           </Field>
           <Field label="Proprietor / Owner">
             <input type="text" value={f.proprietor} onChange={set("proprietor")} placeholder="Full name of proprietor or owner" disabled={isTourGuide} />
@@ -2285,9 +2256,9 @@
         setTimeout(()=>setBanner(b => (b && b.text===text) ? null : b), 3500);
       };
 
-            const options = useMemo(()=>({
+      const options = useMemo(()=>({
         provinceCity: [...new Set(data.map(d=>d.provinceCity).filter(Boolean))].sort(),
-        municipality: [...new Set(data.map(d=>d.municipality).filter(Boolean))].sort(),
+        municipality: MUNICIPALITIES,
         category: DIRECTORY_CATEGORIES,
         officeAgency: [...new Set(data.map(d=>d.officeAgency).filter(Boolean))].sort(),
         year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
@@ -2421,16 +2392,10 @@
           </div>
         ) : (
           <div>
-                                   <div className="table-wrap">
-              <table className="table-even">
-                {(() => {
-                  const cols = ["Province/City","Municipality","Name","Position/Designation","Office/Agency","Contact Number","Email Address","Category","Year","Status","Actions"];
-                  const pct = (100/cols.length).toFixed(4)+"%";
-                  return (<React.Fragment>
-                    <colgroup>{cols.map(h=><col key={h} style={{width:pct}} />)}</colgroup>
-                    <thead><tr>{cols.map(h=><th key={h}>{h}</th>)}</tr></thead>
-                  </React.Fragment>);
-                })()}
+            <div className="table-wrap directory-table-scroll">
+              <table>
+                <thead><tr>{["Province/City","Municipality","Name","Position/Designation","Office/Agency","Contact Number","Email Address","Category","Year","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
                   {paged.map((d,i)=>(
                     <tr key={d.id} className={i%2?"odd":""}>
                       <td>{d.provinceCity || <span className="cell-sub">—</span>}</td>
