@@ -615,6 +615,23 @@
       .analytics-report .ar-bar-fill { background: #0d9488 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
+  <style>
+    /* ===== Directory Print Report (additive) ===== */
+    .dir-print-root { display: none; }
+    @media print {
+      body.printing-directory #root { display: none !important; }
+      body.printing-directory .dir-print-root { display: block; font-family: 'Inter', 'Segoe UI', ui-sans-serif, system-ui, sans-serif; color: #000; background: #fff; }
+      .dir-print-root .dir-title-block { text-align: center; padding: 8px 0 8px; }
+      .dir-print-root .dir-title { font-size: 14px; font-weight: 800; text-transform: uppercase; margin: 0; }
+      .dir-print-root .dir-sub { font-size: 9px; color: #475569; margin: 2px 0 0; }
+      .dir-print-root table.dir-print-table { width: 100%; min-width: 0 !important; table-layout: fixed; border-collapse: collapse; font-size: 8.5px; }
+      .dir-print-root .dir-print-table thead { display: table-header-group; }
+      .dir-print-root .dir-print-table th { background: #f1f5f9 !important; color: #000 !important; border: 1px solid #94a3b8; padding: 4px 5px; text-align: left; font-size: 8.5px; font-weight: 700; text-transform: uppercase; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .dir-print-root .dir-print-table td { border: 1px solid #94a3b8; padding: 4px 5px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
+      .dir-print-root .dir-print-table tr { break-inside: avoid; page-break-inside: avoid; }
+      .dir-print-root .report-generated-note { break-inside: avoid; margin-top: 10px; }
+    }
+  </style>
 </head>
 <body>
   <div id="root"></div>
@@ -2699,6 +2716,7 @@
       const [page, setPage] = useState(1);
       const [banner, setBanner] = useState(null);
       const pageSize = 15;
+      const [printing, setPrinting] = useState(false);
 
       const flashBanner = (type, text) => {
         setBanner({type, text});
@@ -2748,6 +2766,51 @@
 
       const officeOptions = options.officeAgency;
 
+      // ---- Print Report (Directory records) ----
+      useEffect(()=>{
+        if(!printing) return;
+        const st = document.createElement("style");
+        st.id = "dir-page-style";
+        st.textContent = "@page { margin: 12mm; }";
+        document.head.appendChild(st);
+        document.body.classList.add("printing-directory");
+        const cleanup = () => {
+          document.body.classList.remove("printing-directory");
+          const el = document.getElementById("dir-page-style");
+          if(el) el.remove();
+        };
+        const done = () => { cleanup(); setPrinting(false); };
+        window.addEventListener("afterprint", done, {once:true});
+        const t = setTimeout(()=>window.print(), 200);
+        return ()=>{ clearTimeout(t); window.removeEventListener("afterprint", done); cleanup(); };
+      }, [printing]);
+
+      const printList = useMemo(()=>{
+        const muniSet = new Set(MUNICIPALITIES.map(m=>m.toLowerCase()));
+        const isProvince = d => {
+          const m = (d.municipality||"").trim().toLowerCase();
+          return !m || !muniSet.has(m) || m === (d.provinceCity||"").trim().toLowerCase();
+        };
+        const cmp = (a,b) => String(a||"").localeCompare(String(b||""), undefined, {sensitivity:"base"});
+        return [...filtered].sort((a,b)=>{
+          const pa = isProvince(a) ? 0 : 1, pb = isProvince(b) ? 0 : 1;
+          if(pa !== pb) return pa - pb;
+          if(pa === 1){ const c = cmp(a.municipality, b.municipality); if(c) return c; }
+          return cmp(a.name, b.name);
+        });
+      }, [filtered]);
+      const printTitle = (() => {
+        const plural = {"Elected Official":"Elected Officials","PTC Member":"PTC Members","Department Head":"Department Heads","Tourism Officer":"Tourism Officers","Others":"Others"};
+        return filters.category ? (plural[filters.category] || filters.category) + " Directory" : "Directory";
+      })();
+
+      const printFilterText = (() => {
+        const labels = {provinceCity:"Province/City", municipality:"Municipality", category:"Category", officeAgency:"Office/Agency", year:"Year", status:"Status"};
+        const parts = Object.keys(labels).filter(k=>filters[k]).map(k=>labels[k]+": "+filters[k]);
+        if(search.trim()) parts.push('Search: "'+search.trim()+'"');
+        return parts.join("  |  ") || "None (all records)";
+      })();
+
       const save = (f) => {
         if(modal.mode==="edit"){
           setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
@@ -2793,7 +2856,12 @@
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+          <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
+            {view==="records" && (<>
+              <button className="btn btn-outline-teal btn-sm" onClick={()=>{ if(!filtered.length){ flashBanner("error","No records to print for this selection."); return; } setPrinting(true); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C6B6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Print Report
+              </button>
+            </>)}
             {isAdmin && <button className="btn btn-outline-teal btn-sm" onClick={()=>exportSubset(filtered, "Filtered")}><Icon d={ICONS.download} size={13} color="#1C6B6E" /> Export Filtered</button>}
             {isAdmin && <button className="btn btn-outline-teal btn-sm" onClick={handleExportYear}><Icon d={ICONS.download} size={13} color="#1C6B6E" /> Export Selected Year</button>}
             {isAdmin && (
@@ -2902,6 +2970,49 @@
           <Modal title={modal.mode==="edit" ? "Edit Directory Record" : "Add Directory Record"} onClose={()=>setModal(null)}>
             <DirectoryForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} existingData={data} officeOptions={officeOptions} />
           </Modal>
+        )}
+        {printing && ReactDOM.createPortal(
+          <div className="dir-print-root">
+            <div className="print-report-header">
+              <img src={PGO_LOGO_URI} alt="Official Seal of the Province of Occidental Mindoro" />
+              <div className="prh-text">
+                <div className="prh-l1">Republic of the Philippines</div>
+                <div className="prh-l2">Provincial Government of Occidental Mindoro</div>
+                <div className="prh-l3">Provincial Tourism, Culture and Arts Division</div>
+                <div className="prh-l4">Planning Development, Data Banking and Administrative Section</div>
+              </div>
+            </div>
+            <div className="dir-title-block">
+              <h3 className="dir-title">{printTitle}</h3>
+              <p className="dir-sub">Filters applied: <b>{printFilterText}</b> &nbsp;|&nbsp; Total records: <b>{filtered.length}</b></p>
+            </div>
+            <table className="dir-print-table">
+              <colgroup>
+                <col style={{width:"12%"}} /><col style={{width:"13%"}} /><col style={{width:"17%"}} /><col style={{width:"18%"}} /><col style={{width:"16%"}} /><col style={{width:"11%"}} /><col style={{width:"13%"}} />
+              </colgroup>
+              <thead><tr>
+                {["Province/City","Municipality","Name","Position/Designation","Office/Agency","Contact Number","Email Address"].map(h=><th key={h}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {printList.map(d=>(
+                  <tr key={d.id}>
+                    <td>{d.provinceCity || "—"}</td>
+                    <td>{d.municipality || "—"}</td>
+                    <td style={{fontWeight:600}}>{d.name || "—"}</td>
+                    <td>{d.position || "—"}</td>
+                    <td>{d.officeAgency || "—"}</td>
+                    <td>{d.contact || "—"}</td>
+                    <td>{d.email || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="report-generated-note">
+              <p>This report was generated through the Tourism Enterprise &amp; Attraction Inventory by the <strong>Provincial Tourism, Culture and Arts Division – Planning Development, Data Banking and Administrative Section</strong>. Figures reflect the records encoded in the system as of the date generated.</p>
+              <p style={{marginTop:4}}>Prepared by: <strong>RYAN R. TAJONERA</strong>, Tourism Operations Officer II &nbsp;|&nbsp; Date generated: {new Date().toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"})}</p>
+            </div>
+          </div>,
+          document.body
         )}
         {toDelete && (
           <ConfirmDialog text={'Delete the record for "'+toDelete.name+'" ('+(toDelete.municipality||"—")+', '+(toDelete.year||"—")+')? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={handleDelete} />
@@ -3328,7 +3439,7 @@
               <div className="eyebrow">PROVINCIAL TOURISM OFFICE</div>
               <h1 className="title">Tourism Enterprise &amp; Attraction Inventory</h1>
               <div className="subtitle">
-                Data inventory management for provincial tourism establishments and natural/cultural attractions by <span className="author">RYAN R. TAJONERA</span>, Tourism Operations Officer II.
+                Data inventory management for provincial tourism establishments and natural/cultural attractions developed by <span className="author">RYAN R. TAJONERA</span>, Tourism Operations Officer II.
                 {!isAdmin && <span className="viewonly"> — You are in view-only mode</span>}
               </div>
             </div>
