@@ -632,6 +632,286 @@
       .dir-print-root .report-generated-note { break-inside: avoid; margin-top: 10px; }
     }
   </style>
+  <!-- ===== DESIGN OVERRIDE: visual skin from the "Lending Operations & Cash Ledger" reference (fonts) ===== -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style id="design-override">
+    /* =====================================================================
+       DESIGN OVERRIDE — ledger theme (cream paper / forest green / brass)
+       Purely presentational. Placed last so it wins by source order.
+       Layer 1 (global):   colour-token remap — existing rules & inline
+                           styles that use var(--navy) etc. pick it up.
+       Layer 2 (@media screen): typography, borders, radii, controls.
+                           Scoped to screen so every existing @media print
+                           rule and the directory print report are untouched.
+       ===================================================================== */
+
+    /* ---------- LAYER 1 — TOKENS (reference palette) ---------- */
+    :root {
+      /* reference palette */
+      --paper: #F6F1E4;  --paper-2: #EFE8D6;
+      --ink: #22301F;    --ink-soft: #5B6A55;   --rule: #D8CDAE;
+      --ledger-green: #1B3A2F;  --ledger-green-2: #254A3B;
+      --brass: #A6791F;  --brass-soft: #EADFC0;
+      --ok: #2F5D3A;     --ok-soft: #DCE9D9;
+      --warn: #8A6D1B;   --warn-soft: #F9F1D8;
+
+      /* existing token names, re-pointed by visual role */
+      --navy: #1B3A2F;          /* primary dark      -> ledger green   */
+      --navy-deep: #1B3A2F;
+      --teal: #254A3B;          /* secondary/hover   -> ledger green 2 */
+      --teal-soft: #EFE8D6;     /* soft surface/hover-> paper-2        */
+      --gold: #A6791F;          /* accent            -> brass          */
+      --gold-soft: #EADFC0;     /* accent soft       -> brass-soft     */
+      --gold-ink: #8A6D1B;
+      --bg: #F6F1E4;            /* page              -> paper          */
+      --card: #F6F1E4;          /* panels            -> paper          */
+      --border: #D8CDAE;        /* borders           -> rule           */
+      --text: #22301F;          /* primary text      -> ink            */
+      --subtext: #5B6A55;       /* secondary text    -> ink-soft       */
+      --danger: #8C3A2B;
+      --danger-soft: #F1DCD3;
+      --success: #2F5D3A;
+
+      --ring: 0 0 0 2px rgba(166,121,31,.45);
+      --shadow-1: 0 1px 2px rgba(34,48,31,.06);
+      --shadow-2: 0 2px 8px rgba(34,48,31,.08);
+      --shadow-3: 0 8px 28px rgba(0,0,0,.18);
+      --r-sm: 4px; --r-md: 6px; --r-lg: 6px; --r-xl: 10px;
+
+      --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+      --font-body: 'Inter', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    /* ---------- LAYER 2 — SCREEN PRESENTATION ---------- */
+    @media screen {
+
+      body { background: var(--paper); color: var(--ink); font-family: var(--font-body); }
+      h1, h2, h3 { font-family: var(--font-display); }
+      ::selection { background: var(--brass-soft); }
+
+      /* ----- Masthead (ledger-head) ----- */
+      .app-header { border-bottom: 2px solid var(--ledger-green); padding-bottom: 16px; }
+      .app-brand::before {
+        border-radius: 6px;
+        font-family: var(--font-display); font-weight: 600; font-size: 16px;
+        color: var(--paper);
+        background: var(--ledger-green);
+        box-shadow: inset 0 0 0 1px var(--brass);
+      }
+      .eyebrow { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--brass); }
+      .title { font-family: var(--font-display); font-weight: 600; color: var(--ink); letter-spacing: -.005em; }
+      .subtitle { font-size: 12.5px; color: var(--ink-soft); }
+      .subtitle .author { color: var(--warn); font-weight: 600; }
+      .subtitle .viewonly { color: var(--warn); font-weight: 500; }
+      .app-account { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 6px; box-shadow: none; padding: 6px 8px 6px 12px; }
+      .account-email { font-size: 12.5px; color: var(--ink-soft); }
+
+      /* ----- Primary navigation (dark ledger bar) ----- */
+      .section-tabs {
+        background: var(--ledger-green);
+        -webkit-backdrop-filter: none; backdrop-filter: none;
+        border: 1px solid var(--ledger-green);
+        border-radius: 8px;
+        box-shadow: none;
+      }
+      .section-tab {
+        border-radius: 6px; border: 1px solid transparent;
+        background: transparent; color: #DFE8DE;
+        font-family: var(--font-body); font-size: 13.5px; font-weight: 500; letter-spacing: 0;
+        box-shadow: none;
+      }
+      .section-tab:hover:not(.active) { background: rgba(255,255,255,.08); color: var(--paper); border-color: transparent; box-shadow: none; }
+      .section-tab.active { background: rgba(234,223,192,.18); color: var(--paper); border-color: transparent; font-weight: 600; box-shadow: none; }
+      .tab-count { font-family: var(--font-mono); font-size: 11px; font-weight: 500; border-radius: 4px; background: rgba(255,255,255,.12); color: var(--brass-soft); }
+      .section-tab.active .tab-count { background: rgba(234,223,192,.22); color: var(--paper); }
+
+      /* ----- Utility / backup strip ----- */
+      .data-toolbar { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 6px; box-shadow: none; }
+      .data-toolbar .grow { color: var(--ink-soft); }
+      .data-toolbar .grow b { color: var(--ink); font-weight: 600; }
+
+      /* ----- Section header bar & view toggle ----- */
+      .toolbar-row { border-bottom: 1px solid var(--rule); }
+      .view-toggle { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 6px; }
+      .view-toggle button { border-radius: 4px; font-family: var(--font-body); font-weight: 500; color: var(--ink-soft); }
+      .view-toggle button:hover:not(.active) { background: rgba(27,58,47,.06); color: var(--ledger-green); }
+      .view-toggle button.active { background: var(--ledger-green); color: var(--paper); font-weight: 600; box-shadow: none; }
+
+      /* ----- Buttons ----- */
+      .btn {
+        border-radius: 6px; font-family: var(--font-body); font-weight: 500; font-size: 13px; letter-spacing: 0;
+        border: 1px solid var(--ledger-green); background: transparent; color: var(--ledger-green);
+      }
+      .btn:hover { background: rgba(27,58,47,.06); box-shadow: none; }
+      .btn-primary { background: var(--ledger-green); border-color: var(--ledger-green); color: var(--paper); }
+      .btn-primary:hover { background: var(--ledger-green-2); border-color: var(--ledger-green-2); }
+      .btn-danger { background: var(--danger); border-color: var(--danger); color: var(--paper); }
+      .btn-danger:hover { background: var(--danger); filter: brightness(.92); }
+      .btn-outline-teal { background: transparent; border-color: var(--ledger-green); color: var(--ledger-green); }
+      .btn-outline-teal:hover { background: rgba(27,58,47,.06); }
+      .btn-outline-gold { background: transparent; border-color: var(--brass); color: var(--warn); }
+      .btn-outline-gold:hover { background: rgba(166,121,31,.14); }
+      .btn-sm { border-radius: 6px; }
+      .btn:disabled { opacity: .55; cursor: not-allowed; }
+      .btn-ghost { border-radius: 4px; }
+      .btn-ghost:hover { background: rgba(27,58,47,.06); }
+      .clear-btn { background: transparent; border: 1px solid var(--ledger-green); border-radius: 6px; color: var(--ledger-green); font-family: var(--font-body); font-weight: 500; }
+      .clear-btn:hover { background: rgba(27,58,47,.06); border-color: var(--ledger-green); }
+
+      /* inline SVG icon colours (set as attributes in JSX) -> theme colours */
+      svg[stroke="#1C6B6E"] { stroke: #1B3A2F; }
+      svg[stroke="#A8442D"] { stroke: #8C3A2B; }
+      svg[stroke="#8A5F16"] { stroke: #8A6D1B; }
+      svg[stroke="#5E6E6A"] { stroke: #5B6A55; }
+      svg[stroke="#fff"]    { stroke: #F6F1E4; }
+
+      /* ----- Stat cards ----- */
+      .stat-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; box-shadow: none; }
+      .stat-card::before { display: none; }
+      .stat-card:hover { box-shadow: none; transform: none; }
+      .stat-label { font-size: 11px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-soft); }
+      .stat-value { font-family: var(--font-mono); font-weight: 500; font-size: 22px; color: var(--ink); }
+      .donut-hole { box-shadow: none; }
+      .donut-hole b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+      .donut { box-shadow: none; }
+
+      /* ----- Panels & charts ----- */
+      .panel { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; box-shadow: none; }
+      .panel-title {
+        font-family: var(--font-display); font-size: 15px; font-weight: 600;
+        letter-spacing: 0; text-transform: none; color: var(--ink);
+        border-bottom: 1px solid var(--rule);
+      }
+      .bar-label { color: var(--ink); }
+      .bar-track { background: var(--paper-2); border-radius: 3px; }
+      .bar-fill { border-radius: 3px; }
+      .bar-count { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+      /* bar series colours are passed from JS as inline colours; re-map to palette */
+      .bar-fill[style*="28, 107, 110"], .bar-fill[style*="1C6B6E" i] { background: #254A3B !important; }
+      .bar-fill[style*="192, 138, 46"], .bar-fill[style*="C08A2E" i] { background: #A6791F !important; }
+      .bar-fill[style*="14, 59, 60"],   .bar-fill[style*="0E3B3C" i] { background: #1B3A2F !important; }
+      .bar-fill[style*="43, 122, 87"],  .bar-fill[style*="2B7A57" i] { background: #2F5D3A !important; }
+      .legend-item { border-bottom-color: var(--rule); }
+
+      /* ----- Filters ----- */
+      .filter-bar { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 6px; box-shadow: none; }
+      .filter-field-label { font-size: 11px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-soft); }
+      .search-wrap .search-icon, .directory-search .search-icon { color: var(--ink-soft); }
+
+      /* ----- Tables (ledger rules) ----- */
+      .table-wrap { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; box-shadow: none; }
+      .table-wrap::-webkit-scrollbar-thumb { background: var(--rule); border-color: var(--paper); }
+      .table-wrap::-webkit-scrollbar-thumb:hover { background: #C9B77A; }
+      thead tr { background: transparent; color: var(--ink-soft); }
+      thead th, thead tr th {
+        background: transparent;
+        font-family: var(--font-body); font-size: 10.5px; font-weight: 500;
+        letter-spacing: .6px; text-transform: uppercase; color: var(--ink-soft);
+        border-bottom: 1.5px solid var(--ledger-green);
+      }
+      tbody td, td { border-top: 1px solid var(--rule); color: var(--ink); font-size: 12.5px; }
+      tbody tr:first-child td { border-top: none; }
+      tr.odd { background: transparent; }
+      table tbody tr:hover { background: var(--paper-2); }
+      .cell-sub { color: var(--ink-soft); }
+      td .cell-sub ol li::before { background: var(--brass); opacity: .7; }
+      .empty-row { color: var(--ink-soft); font-style: italic; }
+
+      /* ----- Pills / badges ----- */
+      .pill { font-family: var(--font-body); font-size: 11px; font-weight: 500; letter-spacing: 0; padding: 3px 8px; border-radius: 4px; box-shadow: none; }
+      .pill-teal   { background: var(--ok-soft);    color: var(--ok); }
+      .pill-gold   { background: var(--brass-soft); color: var(--warn); }
+      .pill-danger { background: #F1DCD3;           color: var(--danger); }
+      .pill-grey   { background: var(--paper-2);    color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--rule); }
+      .pill-navy   { background: var(--paper-2);    color: var(--ledger-green); }
+
+      /* ----- Banners ----- */
+      .directory-banner { border-radius: 6px; font-weight: 500; }
+      .directory-banner.success { background: var(--ok-soft); color: var(--ok); }
+      .directory-banner.error { background: var(--danger-soft); color: var(--danger); }
+      .directory-pagination { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+      .view-readonly-banner { background: var(--brass-soft); color: var(--ledger-green); border: 1px solid rgba(166,121,31,.35); border-radius: 6px; font-weight: 500; }
+      .warning-box { background: var(--warn-soft); border: 1px solid var(--brass); border-radius: 6px; }
+
+      /* ----- Forms ----- */
+      input[type=text], input[type=date], input, select {
+        background: #fff; border: 1px solid var(--rule); border-radius: 6px;
+        font-family: var(--font-body); font-size: 13.5px; color: var(--ink);
+      }
+      input:focus, select:focus { border-color: var(--ledger-green); box-shadow: none; outline: 1.5px solid var(--ledger-green); outline-offset: 0; }
+      select:disabled { background: var(--paper-2); color: var(--ink-soft); }
+      .field-label { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-soft); }
+      .field-label .req { color: var(--danger); }
+      .form-actions { border-top: 1px solid var(--rule); }
+      .view-field { border-bottom-color: var(--rule); }
+      .view-field-label { font-size: 11px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-soft); }
+      .view-field-value { color: var(--ink); }
+
+      /* ----- Modals ----- */
+      .modal-overlay { background: rgba(27,30,25,.4); -webkit-backdrop-filter: none; backdrop-filter: none; }
+      .modal { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+      .modal-header { background: transparent; border-bottom: 1px solid var(--rule); border-radius: 10px 10px 0 0; }
+      .modal-header h3 { font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--ink); }
+      .confirm-box { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+
+      /* ----- Analytics tab (overrides hard-coded slate/teal) ----- */
+      .analytics-report { font-family: var(--font-body); color: var(--ink); }
+      .analytics-report h2, .analytics-report h3 { font-family: var(--font-display); }
+      .analytics-report .ar-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; box-shadow: none; }
+      .analytics-report .ar-h2 { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--ink); }
+      .analytics-report .ar-sub { font-size: 12.5px; color: var(--ink-soft); }
+      .analytics-report .ar-sub b { color: var(--ink); }
+      .analytics-report .ar-select { font: 400 12.5px var(--font-body); background: #fff; border: 1px solid var(--rule); border-radius: 6px; color: var(--ink); }
+      .analytics-report .ar-select:focus { outline: 1.5px solid var(--ledger-green); }
+      .analytics-report .ar-btn-print { font: 500 13px var(--font-body); background: var(--ledger-green); color: var(--paper); border: 1px solid var(--ledger-green); border-radius: 6px; }
+      .analytics-report .ar-btn-print:hover { background: var(--ledger-green-2); }
+      .analytics-report .ar-pill { font: 500 12.5px var(--font-body); background: transparent; border: 1px solid var(--rule); border-radius: 6px; color: var(--ink); }
+      .analytics-report .ar-pill:hover { background: var(--paper-2); }
+      .analytics-report .ar-pill.active { background: var(--ledger-green); border-color: var(--ledger-green); color: var(--paper); font-weight: 600; }
+      .analytics-report .ar-title-block { border-bottom: 2px solid var(--ledger-green); }
+      .analytics-report .ar-h3 { font-family: var(--font-display); font-weight: 600; color: var(--ink); }
+      .analytics-report .ar-h3s { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--ink); }
+      .analytics-report .ar-scroll::-webkit-scrollbar-track { background: var(--paper-2); }
+      .analytics-report .ar-scroll::-webkit-scrollbar-thumb { background: var(--rule); }
+      .analytics-report .ar-table thead tr { background: var(--paper-2); color: var(--ink); }
+      .analytics-report .ar-table th { border: 1px solid var(--rule); border-bottom: 1.5px solid var(--ledger-green); font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: .4px; color: var(--ink); background: transparent; }
+      .analytics-report .ar-table td { border: 1px solid var(--rule); color: var(--ink); font-size: 12.5px; }
+      .analytics-report .ar-table tbody tr:hover { background: var(--paper-2); }
+      .analytics-report .ar-table .ar-r { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+      .analytics-report .ar-table td.ar-first { color: var(--ink); font-weight: 600; }
+      .analytics-report .ar-table th.ar-key { background: var(--brass-soft); color: var(--ink); }
+      .analytics-report .ar-table td.ar-key { background: rgba(234,223,192,.45); color: var(--ink); font-weight: 600; }
+      .analytics-report .ar-table tfoot tr { background: var(--ledger-green); }
+      .analytics-report .ar-table tfoot td { background: var(--ledger-green); color: var(--paper); border-color: var(--ledger-green); }
+      .analytics-report .ar-table tfoot td.ar-key { background: var(--ledger-green); color: var(--brass-soft); }
+      .analytics-report .ar-table tfoot td.ar-first { background: var(--ledger-green); color: var(--paper); }
+      .analytics-report .ar-foot-note { color: var(--ink-soft); }
+      .analytics-report .ar-bar-label { color: var(--ink); }
+      .analytics-report .ar-bar-track { background: var(--paper-2); border-radius: 3px; }
+      .analytics-report .ar-bar-fill { background: var(--ledger-green-2); border-radius: 3px; }
+      .analytics-report .ar-bar-count { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+      .report-generated-note { border-top-color: var(--rule); color: var(--ink-soft); font-family: var(--font-body); }
+      .report-generated-note strong { color: var(--ink); }
+
+      /* ----- Responsive (same breakpoints as before; visual only) ----- */
+      @media (max-width: 760px) {
+        .app-account { border-radius: 6px; }
+        .section-tabs { border-radius: 6px; }
+        .stat-value { font-size: 19px; }
+      }
+    }
+  </style>
+  <style id="records-print-css">
+    /* ===== Records print reports (additive; extends the Directory print styles) ===== */
+    @media print {
+      .dir-print-root.rec-dense .dir-print-table th,
+      .dir-print-root.rec-dense .dir-print-table td { font-size: 7px; padding: 3px 3px; }
+      .dir-print-root .dir-print-table td div + div { margin-top: 2px; }
+    }
+  </style>
 </head>
 <body>
   <div id="root"></div>
@@ -1622,72 +1902,6 @@
           <Field label="Female Employees"><input type="text" value={f.femaleEmployees} onChange={set("femaleEmployees")} placeholder="0" disabled={isTourGuide} /></Field>
           <Field label="Remarks"><input type="text" value={f.remarks} onChange={set("remarks")} placeholder="Optional remarks" /></Field>
           <Field label="Year (Established / Registered)"><input type="text" value={f.year} onChange={set("year")} placeholder="e.g. 2021" /></Field>
-          <Field label="Status of Accreditation">
-            <div style={{display:"flex", alignItems:"center", gap:8, height:36}}>
-              <span className={"pill " + (getAccredState(f)==="Accredited" ? "pill-teal" : getAccredState(f)==="Expired" ? "pill-danger" : "pill-grey")}>
-                {getAccredState(f)}
-              </span>
-              <span style={{fontSize:11, color:"var(--subtext)"}}>Based on the Accreditation History below</span>
-            </div>
-          </Field>
-          <div style={{gridColumn:"1 / -1"}}>
-            <Field label="Accredited Years">
-              <div style={{display:"flex", flexWrap:"wrap", gap:6}}>
-                {establishmentAccreditedYears(f).length===0 ? (
-                  <span style={{fontSize:12, color:"var(--subtext)"}}>No accreditation records yet — add an accreditation period below.</span>
-                ) : (
-                  establishmentAccreditedYears(f).map(y=>(
-                    <span key={y} className="pill pill-teal">{y}</span>
-                  ))
-                )}
-              </div>
-              <div style={{fontSize:11, color:"var(--subtext)", marginTop:6}}>
-                Automatically calculated from the accreditation periods below — Regular covers 2 calendar years; Basic and N/A-No PAS Level (used for Secondary Enterprises) cover 1 year each, based on the actual dates on file.
-              </div>
-            </Field>
-          </div>
-          <div style={{gridColumn:"1 / -1"}}>
-            <Field label="Accreditation History">
-              <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
-                Record every past accreditation period — level, number, accreditation date, and validity date. All records are kept; the latest appears first.
-              </div>
-              {sortedAccredHistoryForForm(f.accredHistory).map(({h, idx})=>(
-                <div key={idx} style={{display:"flex", gap:8, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap"}}>
-                  <div style={{flex:"1 1 130px"}}>
-                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Level of Accreditation</div>
-                    <select value={h.type} onChange={(e)=>updateHistoryEntry(idx,"type",e.target.value)}>
-                      <option value="">Select level</option>
-                      {accredLevelsForClassification(f.classification).map(t=><option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div style={{flex:"1 1 150px"}}>
-                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Accreditation Number</div>
-                    <input type="text" value={h.number} onChange={(e)=>updateHistoryEntry(idx,"number",e.target.value)} placeholder="e.g. ACC-2020-0001" />
-                  </div>
-                  <div style={{flex:"1 1 140px"}}>
-                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Accreditation Date</div>
-                    <input type="date" value={h.accredDate} onChange={(e)=>updateHistoryEntry(idx,"accredDate",e.target.value)} />
-                  </div>
-                  <div style={{flex:"1 1 140px"}}>
-                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Valid Until</div>
-                    <input type="date" value={h.validity} onChange={(e)=>updateHistoryEntry(idx,"validity",e.target.value)} />
-                  </div>
-                  <div style={{flex:"1 1 110px", fontSize:12, color:"var(--subtext)"}}>
-                    {accredEntryCoverageYears(h).length>0 ? ("Covers: " + accredEntryCoverageYears(h).join(", ")) : ""}
-                  </div>
-                  <button type="button" className="btn-ghost" onClick={()=>removeHistoryEntry(idx)} title="Remove this period">
-                    <Icon d={ICONS.trash} color="#A8442D" />
-                  </button>
-                </div>
-              ))}
-              {(!f.accredHistory || f.accredHistory.length===0) && (
-                <div style={{fontSize:12, color:"var(--subtext)", marginBottom:8}}>No accreditation history recorded yet.</div>
-              )}
-              <button type="button" className="btn btn-outline-teal" onClick={addHistoryEntry}>
-                <Icon d={ICONS.plus} size={13} color="#1C6B6E" /> Add Accreditation Period
-              </button>
-            </Field>
-          </div>
           <Field label="Status of Enterprise">
             <select value={f.status} onChange={set("status")}>
               {ESTAB_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
@@ -1711,9 +1925,6 @@
 
     function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       if(!item) return null;
-      const accredState = getAccredState(item);
-      const latestAccred = latestAccredEntry(item);
-      const history = sortAccredHistoryDesc(getAccredHistory(item));
       return (<div>
         <div className="view-readonly-banner"><Icon d={ICONS.eye} size={14} color="#1C6B6E" /> Read-only view — no changes can be made here. Use Edit to modify this record.</div>
         <div className="view-grid">
@@ -1731,43 +1942,8 @@
           <ViewField label="Total Employees" value={totalEmployees(item)} />
           <ViewField label="Remarks" value={item.remarks} />
           <ViewField label="Year Established / Registered" value={item.year} />
-          <ViewField label="Status of Accreditation" value={accredState} />
-          {latestAccred && (<React.Fragment>
-            <ViewField label="Level of Accreditation" value={latestAccred.type} />
-            <ViewField label="Accreditation Number" value={latestAccred.number} />
-            <ViewField label="Accreditation Validity" value={latestAccred.validity ? formatDateDisplay(latestAccred.validity) : ""} />
-          </React.Fragment>)}
           <ViewField label="Status of Enterprise" value={item.status==="Others" && item.statusOthers ? item.statusOthers : item.status} />
           <ViewField label="Registered on TourLISTA?" value={item.tourlista||"No"} />
-        </div>
-
-        <div style={{marginTop:14}}>
-          <div className="view-field-label" style={{marginBottom:6}}>Accredited Years</div>
-          <div style={{display:"flex", flexWrap:"wrap", gap:6, marginBottom:16}}>
-            {establishmentAccreditedYears(item).length===0 ? (
-              <span style={{fontSize:12, color:"var(--subtext)"}}>No accreditation records on file.</span>
-            ) : establishmentAccreditedYears(item).map(y=><span key={y} className="pill pill-teal">{y}</span>)}
-          </div>
-          <div className="view-field-label" style={{marginBottom:6}}>Accreditation History</div>
-          {history.length===0 ? (
-            <div style={{fontSize:12, color:"var(--subtext)"}}>No accreditation history recorded.</div>
-          ) : (
-            <div className="table-wrap">
-              <table style={{minWidth:"auto"}}>
-                <thead><tr><th>Type</th><th>Number</th><th>Accreditation Date</th><th>Valid Until</th></tr></thead>
-                <tbody>
-                  {history.map((h,idx)=>(
-                    <tr key={idx} className={idx%2?"odd":""}>
-                      <td>{h.type||"—"}</td>
-                      <td>{h.number||"—"}</td>
-                      <td>{h.accredDate?formatDateDisplay(h.accredDate):"—"}</td>
-                      <td>{h.validity?formatDateDisplay(h.validity):"—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
 
         <div className="form-actions">
@@ -2101,15 +2277,13 @@
       const [filters, setFilters] = useState({});
       const [modal, setModal] = useState(null);
       const [toDelete, setToDelete] = useState(null);
-      const [statMunicipality, setStatMunicipality] = useState("");
-      const [statYear, setStatYear] = useState(() => String(new Date().getFullYear()));
+      const [printing, setPrinting] = useState(false);
       const [formDirty, setFormDirty] = useState(false);
       const [showLeaveWarning, setShowLeaveWarning] = useState(false);
 
       const options = useMemo(()=>({
         municipality: MUNICIPALITIES,
         type: [...new Set(data.map(d=>d.type))].sort(),
-        accredStatus: ["Accredited","Expired","Not Accredited"],
         classification: CLASSIFICATIONS,
         tourlista: TOURLISTA_OPTIONS,
         status: ESTAB_STATUSES,
@@ -2121,7 +2295,6 @@
         if(filters.municipality && d.municipality!==filters.municipality) return false;
         if(filters.classification && d.classification!==filters.classification) return false;
         if(filters.type && d.type!==filters.type) return false;
-        if(filters.accredStatus && getAccredState(d)!==filters.accredStatus) return false;
         if(filters.status && d.status!==filters.status) return false;
         if(filters.tourlista && (d.tourlista||"No")!==filters.tourlista) return false;
         if(filters.year && d.year!==filters.year) return false;
@@ -2140,42 +2313,6 @@
         const m = {}; data.forEach(d=>{ m[d.type]=(m[d.type]||0)+1; });
         return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
       }, [data]);
-
-      const accredYearStats = useMemo(()=>{
-        const counts = {};
-        data.forEach(d=>{
-          if(statMunicipality && d.municipality!==statMunicipality) return;
-          establishmentAccreditedYears(d).forEach(y=>{ counts[y] = (counts[y]||0) + 1; });
-        });
-        return Object.entries(counts).map(([year,count])=>({year,count})).sort((a,b)=>a.year.localeCompare(b.year));
-      }, [data, statMunicipality]);
-
-      const accreditedInStatYear = useMemo(()=>{
-        if(!statYear) return [];
-        return data.filter(d=>{
-          if(statMunicipality && d.municipality!==statMunicipality) return false;
-          return establishmentAccreditedYears(d).includes(statYear);
-        }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name));
-      }, [data, statMunicipality, statYear]);
-
-      // Same group as accreditedInStatYear, split by real-time status as of today —
-      // e.g. "30 accredited for 2026" becomes "28 still valid today, 2 expired this year".
-      const statYearBreakdown = useMemo(()=>{
-        if(!statYear) return null;
-        let valid = 0, expired = 0;
-        accreditedInStatYear.forEach(d=>{
-          if(establishmentYearRealtimeStatus(d, statYear)==="Expired") expired++; else valid++;
-        });
-        return { total: accreditedInStatYear.length, valid, expired };
-      }, [accreditedInStatYear, statYear]);
-
-      // How many accredited-for-that-year establishments fall under each type of enterprise
-      // (e.g. Mabuhay Accommodation, Restaurant, Farm Tourism Camp).
-      const statYearByType = useMemo(()=>{
-        const m = {};
-        accreditedInStatYear.forEach(d=>{ m[d.type] = (m[d.type]||0) + 1; });
-        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
-      }, [accreditedInStatYear]);
 
       const save = (f) => {
         if(modal.mode==="edit"){
@@ -2214,9 +2351,16 @@
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          {isAdmin && (
-            <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Enterprise</button>
-          )}
+          <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
+            {view==="records" && (
+              <button className="btn btn-outline-teal btn-sm" onClick={()=>{ if(!filtered.length){ alert("No records to print for this selection."); return; } setPrinting(true); }}>
+                <PrintIcon /> Print Report
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Enterprise</button>
+            )}
+          </div>
         </div>
 
         {view==="dashboard" ? (
@@ -2243,84 +2387,6 @@
                 <div className="panel-title">Per Type</div>
                 <BarList data={byType} color="#C08A2E" />
               </div>
-              <div className="panel span-2">
-                <div className="panel-title" style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8}}>
-                  <span>Accreditation History by Year</span>
-                  <div style={{minWidth:200}}>
-                    <select value={statMunicipality} onChange={(e)=>setStatMunicipality(e.target.value)}>
-                      <option value="">All Municipalities</option>
-                      {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={{fontSize:12, color:"var(--subtext)", marginBottom:10}}>
-                  How many establishments were accredited during each year, based on each establishment's recorded accreditation history.
-                </div>
-                {accredYearStats.length===0 ? (
-                  <div style={{fontSize:13, color:"var(--subtext)"}}>No accreditation history recorded yet.</div>
-                ) : (<React.Fragment>
-                  <BarList data={accredYearStats.map(s=>({name:s.year, count:s.count}))} color="#2B7A57" />
-                  <div className="table-wrap" style={{marginTop:14}}>
-                    <table style={{minWidth:"auto"}}>
-                      <thead><tr><th>Accreditation Year</th><th>Number of Accredited Enterprises</th></tr></thead>
-                      <tbody>
-                        {accredYearStats.map((s,i)=>(
-                          <tr key={s.year} className={i%2?"odd":""}><td>{s.year}</td><td>{s.count}</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </React.Fragment>)}
-                <div style={{borderTop:"1px solid var(--border)", marginTop:16, paddingTop:14}}>
-                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:8}}>
-                    <div style={{fontWeight:700, fontSize:13}}>Accredited Enterprises by Year</div>
-                    <div style={{minWidth:180}}>
-                      {/* FIXED: Dropdown options mapped directly from accredYearStats */}
-                      <select value={statYear} onChange={(e)=>setStatYear(e.target.value)}>
-                        <option value="">Select a year</option>
-                        {accredYearStats.map(s=><option key={s.year} value={s.year}>{s.year}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  {!statYear ? (
-                    <div style={{fontSize:12, color:"var(--subtext)"}}>Select a year above to list the establishments whose accreditation was valid during that year.</div>
-                  ) : accreditedInStatYear.length===0 ? (
-                    <div style={{fontSize:13, color:"var(--subtext)"}}>No establishments were accredited in {statYear}.</div>
-                  ) : (<React.Fragment>
-                    <div className="stat-cards" style={{marginBottom:14}}>
-                      <StatCard label={"Accredited for " + statYear} value={statYearBreakdown.total} />
-                      <StatCard label={"Still Valid (as of today)"} value={statYearBreakdown.valid} />
-                      <StatCard label={"Expired (as of today)"} value={statYearBreakdown.expired} />
-                    </div>
-                    <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Accredited by Type of Enterprise ({statYear})</div>
-                    <BarList data={statYearByType} color="#C08A2E" />
-                    <div style={{fontWeight:700, fontSize:13, margin:"18px 0 8px"}}>Enterprises Accredited in {statYear}</div>
-                    <div className="table-wrap">
-                      <table style={{minWidth:"auto"}}>
-                        <thead><tr><th>Enterprise</th><th>Municipality</th><th>Type of Enterprise</th><th>Accreditation Level</th><th>Status (as of today)</th><th>Accredited Years</th></tr></thead>
-                        <tbody>
-                          {accreditedInStatYear.map((d,i)=>{
-                            const yearEntry = accredEntryForYear(d, statYear);
-                            return (
-                            <tr key={d.id} className={i%2?"odd":""}>
-                              <td>{d.name}</td>
-                              <td>{d.municipality}</td>
-                              <td>{d.type}</td>
-                              <td>{(yearEntry && yearEntry.type) || "—"}</td>
-                              <td>
-                                <span className={"pill " + (establishmentYearRealtimeStatus(d, statYear)==="Expired" ? "pill-danger" : "pill-teal")}>
-                                  {establishmentYearRealtimeStatus(d, statYear)}
-                                </span>
-                              </td>
-                              <td>{establishmentAccreditedYears(d).join(", ")}</td>
-                            </tr>
-                          );})}
-                        </tbody>
-                      </table>
-                    </div>
-                  </React.Fragment>)}
-                </div>
-              </div>
             </div>
           </div>
         ) : (
@@ -2330,42 +2396,21 @@
               {key:"municipality", label:"Municipality"},
               {key:"classification", label:"Classification"},
               {key:"type", label:"Type"},
-              {key:"accredStatus", label:"Accreditation"},
               {key:"status", label:"Status"},
               {key:"tourlista", label:"TourLISTA"},
               {key:"year", label:"Year"},
             ]} />
             <div className="table-wrap">
               <table>
-                <thead><tr>{["Enterprise","Municipality","Rooms","Male","Female","Total Employees","Type","Accreditation","TourLISTA","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Enterprise","Municipality","Rooms","Male","Female","Total Employees","Type","TourLISTA","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
                 <tbody>
                   {filtered.map((d,i)=>{
-                    const accredState = getAccredState(d);
-                    const latestAccred = latestAccredEntry(d);
                     return (
                     <tr key={d.id} className={i%2?"odd":""}>
                       <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
                       <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td>
                       <td>{totalEmployees(d)}</td>
                       <td>{d.type}</td>
-                      <td>
-                        <Pill tone={accredState==="Accredited"?"teal":accredState==="Expired"?"danger":"gold"}>{accredState}</Pill>
-                        {accredState==="Accredited" && latestAccred && latestAccred.type && <div className="cell-sub">{latestAccred.type}</div>}
-                        {latestAccred && latestAccred.validity && <div className="cell-sub">{accredState==="Expired" ? "Expired on " : "Valid until "}{formatDateDisplay(latestAccred.validity)}</div>}
-                        {establishmentAccreditedYears(d).length>0 && (
-                          <div className="cell-sub">Accredited Years: {establishmentAccreditedYears(d).join(", ")}</div>
-                        )}
-                        {sortAccredHistoryDesc(getAccredHistory(d)).length>0 && (
-                          <div className="cell-sub" style={{marginTop:4}}>
-                            <div style={{fontWeight:600}}>History (latest → oldest):</div>
-                            <ol style={{margin:"2px 0 0 16px", padding:0}}>
-                              {sortAccredHistoryDesc(getAccredHistory(d)).map((h,idx)=>(
-                                <li key={idx}>{accredEntryLabel(h)}</li>
-                              ))}
-                            </ol>
-                          </div>
-                        )}
-                      </td>
                       <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
                       <td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
                       <td>
@@ -2386,7 +2431,7 @@
                     </tr>
                     );
                   })}
-                  {filtered.length===0 && <tr><td colSpan="11" className="empty-row">No establishments match these filters.</td></tr>}
+                  {filtered.length===0 && <tr><td colSpan="10" className="empty-row">No establishments match these filters.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -2416,6 +2461,7 @@
             />
           </Modal>
         )}
+        {printing && <RecordsPrintReport {...buildEnterprisesPrint(filtered, filters)} onDone={()=>setPrinting(false)} />}
         {showLeaveWarning && (
           <WarningDialog
             text="You have unsaved changes. Are you sure you want to leave without saving?"
@@ -2431,6 +2477,7 @@
 
     function AttractionsSection({data, setData, isAdmin}){
       const [view, setView] = useState("dashboard");
+      const [printing, setPrinting] = useState(false);
       const [filters, setFilters] = useState({});
       const [modal, setModal] = useState(null);
       const [toDelete, setToDelete] = useState(null);
@@ -2490,9 +2537,16 @@
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          {isAdmin && (
-            <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Attraction</button>
-          )}
+          <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
+            {view==="records" && (
+              <button className="btn btn-outline-teal btn-sm" onClick={()=>{ if(!filtered.length){ alert("No records to print for this selection."); return; } setPrinting(true); }}>
+                <PrintIcon /> Print Report
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Attraction</button>
+            )}
+          </div>
         </div>
 
         {view==="dashboard" ? (
@@ -2575,6 +2629,7 @@
           </div>
         )}
 
+        {printing && <RecordsPrintReport {...buildAttractionsPrint(filtered, filters)} onDone={()=>setPrinting(false)} />}
         {modal && isAdmin && (
           <Modal title={modal.mode==="edit" ? "Edit Attraction" : "Add Attraction"} onClose={()=>setModal(null)}>
             <AttractionForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
@@ -2588,6 +2643,7 @@
 
     function CbtoSection({data, setData, isAdmin}){
       const [view, setView] = useState("dashboard");
+      const [printing, setPrinting] = useState(false);
       const [filters, setFilters] = useState({});
       const [modal, setModal] = useState(null);
       const [toDelete, setToDelete] = useState(null);
@@ -2633,9 +2689,16 @@
             <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
             <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
           </div>
-          {isAdmin && (
-            <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add CBTO</button>
-          )}
+          <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
+            {view==="records" && (
+              <button className="btn btn-outline-teal btn-sm" onClick={()=>{ if(!filtered.length){ alert("No records to print for this selection."); return; } setPrinting(true); }}>
+                <PrintIcon /> Print Report
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add CBTO</button>
+            )}
+          </div>
         </div>
 
         {view==="dashboard" ? (
@@ -2691,6 +2754,7 @@
           </div>
         )}
 
+        {printing && <RecordsPrintReport {...buildCbtosPrint(filtered, filters)} onDone={()=>setPrinting(false)} />}
         {modal && isAdmin && (
           <Modal title={modal.mode==="edit" ? "Edit CBTO" : "Add CBTO"} onClose={()=>setModal(null)}>
             <CbtoForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
@@ -3016,6 +3080,628 @@
         )}
         {toDelete && (
           <ConfirmDialog text={'Delete the record for "'+toDelete.name+'" ('+(toDelete.municipality||"—")+', '+(toDelete.year||"—")+')? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={handleDelete} />
+        )}
+      </div>);
+    }
+
+    // =====================================================================
+    // RECORDS PRINT REPORTS (Enterprises, Accreditation, Attractions, CBTOs)
+    // Same print mechanism, header, look and generated-by note as the
+    // Directory print report (re-uses its .dir-print-root print styles).
+    // =====================================================================
+    function PrintIcon(){
+      return (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C6B6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>);
+    }
+    function printCell(v){ return (v===undefined || v===null || v==="") ? "—" : String(v); }
+    function printFilterSummary(fields, filters){
+      const parts = fields.filter(fl => filters && filters[fl.key]).map(fl => fl.label + ": " + filters[fl.key]);
+      return parts.length ? parts.join("; ") : "None (all records)";
+    }
+    const ENTERPRISE_PRINT_FILTERS = [
+      {key:"name", label:"Enterprise"}, {key:"municipality", label:"Municipality"}, {key:"classification", label:"Classification"},
+      {key:"type", label:"Type"}, {key:"status", label:"Status"}, {key:"tourlista", label:"TourLISTA"}, {key:"year", label:"Year"},
+    ];
+    const ACCRED_PRINT_FILTERS = [
+      {key:"name", label:"Enterprise"}, {key:"municipality", label:"Municipality"}, {key:"classification", label:"Classification"},
+      {key:"type", label:"Type"}, {key:"accredStatus", label:"Accreditation"},
+    ];
+    const ATTRACTION_PRINT_FILTERS = [
+      {key:"name", label:"Attraction"}, {key:"municipality", label:"Municipality"}, {key:"category", label:"Category"},
+      {key:"selection", label:"Status"}, {key:"physicalCondition", label:"Physical Condition"}, {key:"declarationStatus", label:"Declaration Status"},
+    ];
+    const CBTO_PRINT_FILTERS = [
+      {key:"nameAddress", label:"CBTO Name"}, {key:"municipality", label:"Municipality"},
+    ];
+
+    // Enterprises: every field of the Enterprises Excel export except the accreditation
+    // columns, which now live in (and print from) the Accreditation section.
+    function buildEnterprisesPrint(list, filters){
+      const keep = ESTAB_HEADERS.map((h,i)=> /accredit/i.test(h) ? -1 : i).filter(i=>i>=0);
+      return {
+        title: "Enterprises Records",
+        filterText: printFilterSummary(ENTERPRISE_PRINT_FILTERS, filters),
+        total: list.length,
+        headers: keep.map(i=>ESTAB_HEADERS[i]),
+        rows: buildEstabRows(list).map(r=>keep.map(i=>printCell(r[i]))),
+        colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,6,5,4,6],
+        dense: true,
+      };
+    }
+    function buildAttractionsPrint(list, filters){
+      return {
+        title: "Attractions Records",
+        filterText: printFilterSummary(ATTRACTION_PRINT_FILTERS, filters),
+        total: list.length,
+        headers: ATTR_HEADERS,
+        rows: buildAttrRows(list).map(r=>r.map(printCell)),
+        colWidths: [4,8,14,5,7,7,9,10,5,10,12,4.5,4.5],
+        dense: true,
+      };
+    }
+    function buildCbtosPrint(list, filters){
+      return {
+        title: "CBTOs Records",
+        filterText: printFilterSummary(CBTO_PRINT_FILTERS, filters),
+        total: list.length,
+        headers: CBTO_HEADERS,
+        rows: buildCbtoRows(list).map(r=>r.map(printCell)),
+        colWidths: [4,9,20,13,7,7,7,16,17],
+        dense: false,
+      };
+    }
+    // Accreditation: every accreditation field of the Enterprises Excel export
+    // (status, level, number, validity, history, accredited years), with the enterprise
+    // identifiers (name, municipality, classification, type) so each row is readable.
+    function buildAccreditationPrint(list, filters){
+      return {
+        title: "Accreditation Records",
+        filterText: printFilterSummary(ACCRED_PRINT_FILTERS, filters),
+        total: list.length,
+        headers: ["No.","Name of Enterprise","Municipality","Classification","Type","Status of Accreditation","Level of Accreditation","Accreditation Number","Accreditation Validity","Accreditation History","Accredited Years"],
+        rows: list.map((d,i)=>{
+          const latest = latestAccredEntry(d);
+          const hist = sortAccredHistoryDesc(getAccredHistory(d));
+          return [
+            i+1, printCell(d.name), printCell(d.municipality), printCell(d.classification), printCell(d.type),
+            getAccredState(d), printCell(latest && latest.type), printCell(latest && latest.number),
+            (latest && latest.validity) ? formatDateDisplay(latest.validity) : "—",
+            hist.length===0 ? "—" : hist.map((h,k)=>(
+              <div key={k}>{(h.type||"—") + " · No. " + (h.number||"—") + " · " + (h.accredDate?formatDateDisplay(h.accredDate):"—") + " to " + (h.validity?formatDateDisplay(h.validity):"—")}</div>
+            )),
+            establishmentAccreditedYears(d).join(", ") || "—",
+          ];
+        }),
+        colWidths: [4,16,9,9,10,8,8,9,8,13,6],
+        dense: true,
+      };
+    }
+
+    function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths, dense, onDone }){
+      useEffect(()=>{
+        const st = document.createElement("style");
+        st.id = "rec-page-style";
+        st.textContent = "@page { margin: 12mm; }";
+        document.head.appendChild(st);
+        document.body.classList.add("printing-directory");
+        const cleanup = () => {
+          document.body.classList.remove("printing-directory");
+          const el = document.getElementById("rec-page-style");
+          if(el) el.remove();
+        };
+        const done = () => { cleanup(); onDone(); };
+        window.addEventListener("afterprint", done, {once:true});
+        const t = setTimeout(()=>window.print(), 200);
+        return ()=>{ clearTimeout(t); window.removeEventListener("afterprint", done); cleanup(); };
+      }, []);
+      const generatedOn = new Date().toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"});
+      return ReactDOM.createPortal(
+        <div className={"dir-print-root" + (dense ? " rec-dense" : "")}>
+          <div className="print-report-header">
+            <img src={PGO_LOGO_URI} alt="Official Seal of the Province of Occidental Mindoro" />
+            <div className="prh-text">
+              <div className="prh-l1">Republic of the Philippines</div>
+              <div className="prh-l2">Provincial Government of Occidental Mindoro</div>
+              <div className="prh-l3">Provincial Tourism, Culture and Arts Division</div>
+              <div className="prh-l4">Planning Development, Data Banking and Administrative Section</div>
+            </div>
+          </div>
+          <div className="dir-title-block">
+            <h3 className="dir-title">{title}</h3>
+            <p className="dir-sub">Filters applied: <b>{filterText}</b> &nbsp;|&nbsp; Total records: <b>{total}</b></p>
+          </div>
+          <table className="dir-print-table">
+            <colgroup>{colWidths.map((w,i)=><col key={i} style={{width:w+"%"}} />)}</colgroup>
+            <thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead>
+            <tbody>
+              {rows.map((r,i)=>(<tr key={i}>{r.map((c,j)=><td key={j}>{c}</td>)}</tr>))}
+            </tbody>
+          </table>
+        <div className="report-generated-note">
+          <p>This report was generated through the Tourism Enterprise &amp; Attraction Inventory by the <strong>Provincial Tourism, Culture and Arts Division – Planning Development, Data Banking and Administrative Section</strong>. Figures reflect the records encoded in the system as of the date generated.</p>
+          <p style={{marginTop:4}}>Prepared by: <strong>RYAN R. TAJONERA</strong>, Tourism Operations Officer II &nbsp;|&nbsp; Date generated: {generatedOn}</p>
+        </div>
+        </div>,
+        document.body
+      );
+    }
+
+    // =====================================================================
+    // ACCREDITATION SECTION (moved out of Enterprises — same data, same fields:
+    // each enterprise's accredHistory is read and saved on the establishment record)
+    // =====================================================================
+    function AccreditationViewInfo({item, onEdit, onClose, isAdmin}){
+      if(!item) return null;
+      const accredState = getAccredState(item);
+      const latestAccred = latestAccredEntry(item);
+      const history = sortAccredHistoryDesc(getAccredHistory(item));
+      return (<div>
+        <div className="view-readonly-banner"><Icon d={ICONS.eye} size={14} color="#1C6B6E" /> Read-only view — no changes can be made here. Use Edit to modify this record.</div>
+        <div className="view-grid">
+          <ViewField label="Name of Enterprise" value={item.name} />
+          <ViewField label="Municipality" value={item.municipality} />
+          <ViewField label="Classification" value={item.classification} />
+          <ViewField label="Type" value={item.type} />
+          <ViewField label="Status of Accreditation" value={accredState} />
+          {latestAccred && (<React.Fragment>
+            <ViewField label="Level of Accreditation" value={latestAccred.type} />
+            <ViewField label="Accreditation Number" value={latestAccred.number} />
+            <ViewField label="Accreditation Validity" value={latestAccred.validity ? formatDateDisplay(latestAccred.validity) : ""} />
+          </React.Fragment>)}
+        </div>
+
+        <div style={{marginTop:14}}>
+          <div className="view-field-label" style={{marginBottom:6}}>Accredited Years</div>
+          <div style={{display:"flex", flexWrap:"wrap", gap:6, marginBottom:16}}>
+            {establishmentAccreditedYears(item).length===0 ? (
+              <span style={{fontSize:12, color:"var(--subtext)"}}>No accreditation records on file.</span>
+            ) : establishmentAccreditedYears(item).map(y=><span key={y} className="pill pill-teal">{y}</span>)}
+          </div>
+          <div className="view-field-label" style={{marginBottom:6}}>Accreditation History</div>
+          {history.length===0 ? (
+            <div style={{fontSize:12, color:"var(--subtext)"}}>No accreditation history recorded.</div>
+          ) : (
+            <div className="table-wrap">
+              <table style={{minWidth:"auto"}}>
+                <thead><tr><th>Type</th><th>Number</th><th>Accreditation Date</th><th>Valid Until</th></tr></thead>
+                <tbody>
+                  {history.map((h,idx)=>(
+                    <tr key={idx} className={idx%2?"odd":""}>
+                      <td>{h.type||"—"}</td>
+                      <td>{h.number||"—"}</td>
+                      <td>{h.accredDate?formatDateDisplay(h.accredDate):"—"}</td>
+                      <td>{h.validity?formatDateDisplay(h.validity):"—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="form-actions">
+          <button className="btn" onClick={onClose}>Close</button>
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit Accreditation</button>
+          )}
+        </div>
+      </div>);
+    }
+
+    function AccreditationForm({initial, onCancel, onSave, onDirtyChange}){
+      const [f, setF] = useState(() => ({...initial, accredHistory: getAccredHistory(initial)}));
+      const [confirmSave, setConfirmSave] = useState(null);
+      const initialSnapshotRef = useRef({...initial, accredHistory: getAccredHistory(initial)});
+
+      useEffect(() => {
+        if(typeof onDirtyChange !== "function") return;
+        onDirtyChange(diffEstablishment(initialSnapshotRef.current, f).length > 0);
+      }, [f]);
+
+      const addHistoryEntry = () => {
+        setF(prev => ({...prev, accredHistory: [...(prev.accredHistory||[]), {type:"", number:"", accredDate:"", validity:""}]}));
+      };
+      const updateHistoryEntry = (idx, key, value) => {
+        setF(prev => {
+          const next = (prev.accredHistory||[]).slice();
+          next[idx] = {...next[idx], [key]: value};
+          return {...prev, accredHistory: next};
+        });
+      };
+      const removeHistoryEntry = (idx) => {
+        setF(prev => {
+          const next = (prev.accredHistory||[]).slice();
+          next.splice(idx,1);
+          return {...prev, accredHistory: next};
+        });
+      };
+
+      const submit = () => {
+        const cleaned = {...f, accredHistory: normalizeAccredHistory(f.accredHistory)};
+        const changes = diffEstablishment(initialSnapshotRef.current, cleaned);
+        if(changes.length === 0){
+          onSave(cleaned.accredHistory);
+          return;
+        }
+        setConfirmSave({ changes, list: cleaned.accredHistory });
+      };
+
+      if(confirmSave){
+        return (<div>
+          <div className="warning-box">
+            <div style={{fontWeight:700, color:"var(--navy)", fontSize:15, marginBottom:6}}>Confirm Changes</div>
+            <div style={{fontSize:13, color:"var(--text)", marginBottom:12}}>
+              You are about to update this establishment. Do you want to proceed with saving these changes?
+            </div>
+            <div style={{background:"#fff", border:"1px solid var(--border)", borderRadius:8, overflow:"hidden"}}>
+              {confirmSave.changes.map((c,idx)=>(
+                <div className="change-summary-item" key={c.key || idx}>
+                  <div style={{fontWeight:600, fontSize:13, color:"var(--navy)"}}>{c.label}</div>
+                  <div style={{fontSize:12, color:"var(--subtext)"}}>{c.from} → {c.to}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="form-actions">
+            <button className="btn" onClick={()=>setConfirmSave(null)}>Cancel / Go Back</button>
+            <button className="btn btn-primary" onClick={()=>onSave(confirmSave.list)}>Confirm / Save Changes</button>
+          </div>
+        </div>);
+      }
+
+      return (<div>
+        <div className="view-grid" style={{marginBottom:14}}>
+          <ViewField label="Name of Enterprise" value={initial.name} />
+          <ViewField label="Municipality" value={initial.municipality} />
+          <ViewField label="Classification" value={initial.classification} />
+          <ViewField label="Type" value={initial.type} />
+        </div>
+        <div className="form-grid">
+          <Field label="Status of Accreditation">
+            <div style={{display:"flex", alignItems:"center", gap:8, height:36}}>
+              <span className={"pill " + (getAccredState(f)==="Accredited" ? "pill-teal" : getAccredState(f)==="Expired" ? "pill-danger" : "pill-grey")}>
+                {getAccredState(f)}
+              </span>
+              <span style={{fontSize:11, color:"var(--subtext)"}}>Based on the Accreditation History below</span>
+            </div>
+          </Field>
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Accredited Years">
+              <div style={{display:"flex", flexWrap:"wrap", gap:6}}>
+                {establishmentAccreditedYears(f).length===0 ? (
+                  <span style={{fontSize:12, color:"var(--subtext)"}}>No accreditation records yet — add an accreditation period below.</span>
+                ) : (
+                  establishmentAccreditedYears(f).map(y=>(
+                    <span key={y} className="pill pill-teal">{y}</span>
+                  ))
+                )}
+              </div>
+              <div style={{fontSize:11, color:"var(--subtext)", marginTop:6}}>
+                Automatically calculated from the accreditation periods below — Regular covers 2 calendar years; Basic and N/A-No PAS Level (used for Secondary Enterprises) cover 1 year each, based on the actual dates on file.
+              </div>
+            </Field>
+          </div>
+          <div style={{gridColumn:"1 / -1"}}>
+            <Field label="Accreditation History">
+              <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
+                Record every past accreditation period — level, number, accreditation date, and validity date. All records are kept; the latest appears first.
+              </div>
+              {sortedAccredHistoryForForm(f.accredHistory).map(({h, idx})=>(
+                <div key={idx} style={{display:"flex", gap:8, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap"}}>
+                  <div style={{flex:"1 1 130px"}}>
+                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Level of Accreditation</div>
+                    <select value={h.type} onChange={(e)=>updateHistoryEntry(idx,"type",e.target.value)}>
+                      <option value="">Select level</option>
+                      {accredLevelsForClassification(f.classification).map(t=><option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div style={{flex:"1 1 150px"}}>
+                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Accreditation Number</div>
+                    <input type="text" value={h.number} onChange={(e)=>updateHistoryEntry(idx,"number",e.target.value)} placeholder="e.g. ACC-2020-0001" />
+                  </div>
+                  <div style={{flex:"1 1 140px"}}>
+                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Accreditation Date</div>
+                    <input type="date" value={h.accredDate} onChange={(e)=>updateHistoryEntry(idx,"accredDate",e.target.value)} />
+                  </div>
+                  <div style={{flex:"1 1 140px"}}>
+                    <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Valid Until</div>
+                    <input type="date" value={h.validity} onChange={(e)=>updateHistoryEntry(idx,"validity",e.target.value)} />
+                  </div>
+                  <div style={{flex:"1 1 110px", fontSize:12, color:"var(--subtext)"}}>
+                    {accredEntryCoverageYears(h).length>0 ? ("Covers: " + accredEntryCoverageYears(h).join(", ")) : ""}
+                  </div>
+                  <button type="button" className="btn-ghost" onClick={()=>removeHistoryEntry(idx)} title="Remove this period">
+                    <Icon d={ICONS.trash} color="#A8442D" />
+                  </button>
+                </div>
+              ))}
+              {(!f.accredHistory || f.accredHistory.length===0) && (
+                <div style={{fontSize:12, color:"var(--subtext)", marginBottom:8}}>No accreditation history recorded yet.</div>
+              )}
+              <button type="button" className="btn btn-outline-teal" onClick={addHistoryEntry}>
+                <Icon d={ICONS.plus} size={13} color="#1C6B6E" /> Add Accreditation Period
+              </button>
+            </Field>
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="btn" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit}>Save Changes</button>
+        </div>
+      </div>);
+    }
+
+    function AccreditationSection({data, setData, isAdmin}){
+      const [view, setView] = useState("dashboard");
+      const [filters, setFilters] = useState({});
+      const [modal, setModal] = useState(null);
+      const [statMunicipality, setStatMunicipality] = useState("");
+      const [statYear, setStatYear] = useState(() => String(new Date().getFullYear()));
+      const [formDirty, setFormDirty] = useState(false);
+      const [showLeaveWarning, setShowLeaveWarning] = useState(false);
+      const [printing, setPrinting] = useState(false);
+
+      const options = useMemo(()=>({
+        municipality: MUNICIPALITIES,
+        classification: CLASSIFICATIONS,
+        type: [...new Set(data.map(d=>d.type))].sort(),
+        accredStatus: ["Accredited","Expired","Not Accredited"],
+      }), [data]);
+
+      const filtered = useMemo(()=>data.filter(d=>{
+        if(filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
+        if(filters.municipality && d.municipality!==filters.municipality) return false;
+        if(filters.classification && d.classification!==filters.classification) return false;
+        if(filters.type && d.type!==filters.type) return false;
+        if(filters.accredStatus && getAccredState(d)!==filters.accredStatus) return false;
+        return true;
+      }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
+
+      const accredYearStats = useMemo(()=>{
+        const counts = {};
+        data.forEach(d=>{
+          if(statMunicipality && d.municipality!==statMunicipality) return;
+          establishmentAccreditedYears(d).forEach(y=>{ counts[y] = (counts[y]||0) + 1; });
+        });
+        return Object.entries(counts).map(([year,count])=>({year,count})).sort((a,b)=>a.year.localeCompare(b.year));
+      }, [data, statMunicipality]);
+
+      const accreditedInStatYear = useMemo(()=>{
+        if(!statYear) return [];
+        return data.filter(d=>{
+          if(statMunicipality && d.municipality!==statMunicipality) return false;
+          return establishmentAccreditedYears(d).includes(statYear);
+        }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name));
+      }, [data, statMunicipality, statYear]);
+
+      // Same group as accreditedInStatYear, split by real-time status as of today —
+      // e.g. "30 accredited for 2026" becomes "28 still valid today, 2 expired this year".
+      const statYearBreakdown = useMemo(()=>{
+        if(!statYear) return null;
+        let valid = 0, expired = 0;
+        accreditedInStatYear.forEach(d=>{
+          if(establishmentYearRealtimeStatus(d, statYear)==="Expired") expired++; else valid++;
+        });
+        return { total: accreditedInStatYear.length, valid, expired };
+      }, [accreditedInStatYear, statYear]);
+
+      // How many accredited-for-that-year establishments fall under each type of enterprise
+      // (e.g. Mabuhay Accommodation, Restaurant, Farm Tourism Camp).
+      const statYearByType = useMemo(()=>{
+        const m = {};
+        accreditedInStatYear.forEach(d=>{ m[d.type] = (m[d.type]||0) + 1; });
+        return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+      }, [accreditedInStatYear]);
+
+
+      // Saves only the accreditation history onto the existing enterprise record.
+      const saveAccred = (list) => {
+        setData(prev=>prev.map(d=> d.id===modal.item.id ? {...d, accredHistory: list} : d));
+        setFormDirty(false);
+        setModal(null);
+      };
+      const requestCloseModal = () => {
+        if(modal && modal.mode !== "view" && formDirty){
+          setShowLeaveWarning(true);
+        } else {
+          setModal(null);
+          setFormDirty(false);
+        }
+      };
+      const stayEditing = () => setShowLeaveWarning(false);
+      const discardAndClose = () => {
+        setShowLeaveWarning(false);
+        setFormDirty(false);
+        setModal(null);
+      };
+
+      return (<div>
+        <div className="toolbar-row">
+          <div className="view-toggle">
+            <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
+            <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
+          </div>
+          {view==="records" && (
+            <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
+              <button className="btn btn-outline-teal btn-sm" onClick={()=>{ if(!filtered.length){ alert("No records to print for this selection."); return; } setPrinting(true); }}>
+                <PrintIcon /> Print Report
+              </button>
+            </div>
+          )}
+        </div>
+
+        {view==="dashboard" ? (
+          <div>
+            <div className="charts-grid">
+              <div className="panel span-2">
+                <div className="panel-title" style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8}}>
+                  <span>Accreditation History by Year</span>
+                  <div style={{minWidth:200}}>
+                    <select value={statMunicipality} onChange={(e)=>setStatMunicipality(e.target.value)}>
+                      <option value="">All Municipalities</option>
+                      {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{fontSize:12, color:"var(--subtext)", marginBottom:10}}>
+                  How many establishments were accredited during each year, based on each establishment's recorded accreditation history.
+                </div>
+                {accredYearStats.length===0 ? (
+                  <div style={{fontSize:13, color:"var(--subtext)"}}>No accreditation history recorded yet.</div>
+                ) : (<React.Fragment>
+                  <BarList data={accredYearStats.map(s=>({name:s.year, count:s.count}))} color="#2B7A57" />
+                  <div className="table-wrap" style={{marginTop:14}}>
+                    <table style={{minWidth:"auto"}}>
+                      <thead><tr><th>Accreditation Year</th><th>Number of Accredited Enterprises</th></tr></thead>
+                      <tbody>
+                        {accredYearStats.map((s,i)=>(
+                          <tr key={s.year} className={i%2?"odd":""}><td>{s.year}</td><td>{s.count}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </React.Fragment>)}
+                <div style={{borderTop:"1px solid var(--border)", marginTop:16, paddingTop:14}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:8}}>
+                    <div style={{fontWeight:700, fontSize:13}}>Accredited Enterprises by Year</div>
+                    <div style={{minWidth:180}}>
+                      {/* FIXED: Dropdown options mapped directly from accredYearStats */}
+                      <select value={statYear} onChange={(e)=>setStatYear(e.target.value)}>
+                        <option value="">Select a year</option>
+                        {accredYearStats.map(s=><option key={s.year} value={s.year}>{s.year}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {!statYear ? (
+                    <div style={{fontSize:12, color:"var(--subtext)"}}>Select a year above to list the establishments whose accreditation was valid during that year.</div>
+                  ) : accreditedInStatYear.length===0 ? (
+                    <div style={{fontSize:13, color:"var(--subtext)"}}>No establishments were accredited in {statYear}.</div>
+                  ) : (<React.Fragment>
+                    <div className="stat-cards" style={{marginBottom:14}}>
+                      <StatCard label={"Accredited for " + statYear} value={statYearBreakdown.total} />
+                      <StatCard label={"Still Valid (as of today)"} value={statYearBreakdown.valid} />
+                      <StatCard label={"Expired (as of today)"} value={statYearBreakdown.expired} />
+                    </div>
+                    <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Accredited by Type of Enterprise ({statYear})</div>
+                    <BarList data={statYearByType} color="#C08A2E" />
+                    <div style={{fontWeight:700, fontSize:13, margin:"18px 0 8px"}}>Enterprises Accredited in {statYear}</div>
+                    <div className="table-wrap">
+                      <table style={{minWidth:"auto"}}>
+                        <thead><tr><th>Enterprise</th><th>Municipality</th><th>Type of Enterprise</th><th>Accreditation Level</th><th>Status (as of today)</th><th>Accredited Years</th></tr></thead>
+                        <tbody>
+                          {accreditedInStatYear.map((d,i)=>{
+                            const yearEntry = accredEntryForYear(d, statYear);
+                            return (
+                            <tr key={d.id} className={i%2?"odd":""}>
+                              <td>{d.name}</td>
+                              <td>{d.municipality}</td>
+                              <td>{d.type}</td>
+                              <td>{(yearEntry && yearEntry.type) || "—"}</td>
+                              <td>
+                                <span className={"pill " + (establishmentYearRealtimeStatus(d, statYear)==="Expired" ? "pill-danger" : "pill-teal")}>
+                                  {establishmentYearRealtimeStatus(d, statYear)}
+                                </span>
+                              </td>
+                              <td>{establishmentAccreditedYears(d).join(", ")}</td>
+                            </tr>
+                          );})}
+                        </tbody>
+                      </table>
+                    </div>
+                  </React.Fragment>)}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
+              {key:"name", label:"Enterprise", type:"search", placeholder:"Search by name"},
+              {key:"municipality", label:"Municipality"},
+              {key:"classification", label:"Classification"},
+              {key:"type", label:"Type"},
+              {key:"accredStatus", label:"Accreditation"},
+            ]} />
+            <div className="table-wrap">
+              <table>
+                <thead><tr>{["Enterprise","Municipality","Classification","Type","Accreditation","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {filtered.map((d,i)=>{
+                    const accredState = getAccredState(d);
+                    const latestAccred = latestAccredEntry(d);
+                    return (
+                    <tr key={d.id} className={i%2?"odd":""}>
+                      <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
+                      <td>{d.municipality}</td>
+                      <td>{d.classification}</td>
+                      <td>{d.type}</td>
+                      <td>
+                        <Pill tone={accredState==="Accredited"?"teal":accredState==="Expired"?"danger":"gold"}>{accredState}</Pill>
+                        {accredState==="Accredited" && latestAccred && latestAccred.type && <div className="cell-sub">{latestAccred.type}</div>}
+                        {latestAccred && latestAccred.validity && <div className="cell-sub">{accredState==="Expired" ? "Expired on " : "Valid until "}{formatDateDisplay(latestAccred.validity)}</div>}
+                        {establishmentAccreditedYears(d).length>0 && (
+                          <div className="cell-sub">Accredited Years: {establishmentAccreditedYears(d).join(", ")}</div>
+                        )}
+                        {sortAccredHistoryDesc(getAccredHistory(d)).length>0 && (
+                          <div className="cell-sub" style={{marginTop:4}}>
+                            <div style={{fontWeight:600}}>History (latest → oldest):</div>
+                            <ol style={{margin:"2px 0 0 16px", padding:0}}>
+                              {sortAccredHistoryDesc(getAccredHistory(d)).map((h,idx)=>(
+                                <li key={idx}>{accredEntryLabel(h)}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <div className="actions-cell">
+                          <button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFormDirty(false); setModal({mode:"view", item:d}); }}>
+                            <Icon d={ICONS.eye} size={13} color="#1C6B6E" /> View Info
+                          </button>
+                          {isAdmin && (
+                            <button className="btn btn-primary btn-sm" onClick={()=>{ setFormDirty(false); setModal({mode:"edit", item:d}); }}>
+                              <Icon d={ICONS.edit} size={13} color="#fff" /> Edit
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    );
+                  })}
+                  {filtered.length===0 && <tr><td colSpan="6" className="empty-row">No establishments match these filters.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {modal && modal.mode==="view" && (
+          <Modal title="Accreditation Information" onClose={()=>setModal(null)}>
+            <AccreditationViewInfo
+              item={modal.item}
+              onClose={()=>setModal(null)}
+              onEdit={()=>{ setFormDirty(false); setModal({mode:"edit", item:modal.item}); }}
+              isAdmin={isAdmin}
+            />
+          </Modal>
+        )}
+        {modal && isAdmin && modal.mode==="edit" && (
+          <Modal title="Edit Accreditation" onClose={requestCloseModal}>
+            <AccreditationForm
+              key={"accred-" + modal.item.id}
+              initial={modal.item}
+              onCancel={requestCloseModal}
+              onSave={saveAccred}
+              onDirtyChange={setFormDirty}
+            />
+          </Modal>
+        )}
+        {printing && <RecordsPrintReport {...buildAccreditationPrint(filtered, filters)} onDone={()=>setPrinting(false)} />}
+        {showLeaveWarning && (
+          <WarningDialog
+            text="You have unsaved changes. Are you sure you want to leave without saving?"
+            onStay={stayEditing}
+            onDiscard={discardAndClose}
+          />
         )}
       </div>);
     }
@@ -3459,6 +4145,9 @@
           <button className={"section-tab " + (tab==="establishments"?"active":"")} onClick={()=>setTab("establishments")}>
             Enterprises <span className="tab-count">{establishments.length}</span>
           </button>
+          <button className={"section-tab " + (tab==="accreditation"?"active":"")} onClick={()=>setTab("accreditation")}>
+            Accreditation <span className="tab-count">{establishments.length}</span>
+          </button>
           <button className={"section-tab " + (tab==="attractions"?"active":"")} onClick={()=>setTab("attractions")}>
             Attractions <span className="tab-count">{attractions.length}</span>
           </button>
@@ -3482,6 +4171,9 @@
 
         {tab === "establishments" && (
           <EstablishmentsSection data={establishments} setData={setEstablishments} isAdmin={isAdmin} />
+        )}
+        {tab === "accreditation" && (
+          <AccreditationSection data={establishments} setData={setEstablishments} isAdmin={isAdmin} />
         )}
         {tab === "attractions" && (
           <AttractionsSection data={attractions} setData={setAttractions} isAdmin={isAdmin} />
