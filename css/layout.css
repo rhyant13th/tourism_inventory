@@ -1,0 +1,36 @@
+/* LAYOUT: two-column layout (left menu + main area).
+   (Load order in index.html matters: later files override earlier ones.) */
+
+  /* ===== TWO-COLUMN LAYOUT (additive; layout only) =====
+     Column 1 = section navigation (Enterprises, Accreditation, Attractions,
+     CBTOs, Directory, Analytics). Column 2 = backup toolbar + active section. */
+  .app-layout { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 20px; }
+  .side-col { position: sticky; top: 16px; align-self: start; }
+  .main-col { min-width: 0; }
+  .side-label { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--subtext); margin: 0 4px 8px; }
+
+  .side-col .section-tabs {
+    position: static; top: auto;
+    flex-direction: column; flex-wrap: nowrap; align-items: stretch;
+    gap: 4px; margin: 0; padding: 8px; overflow: visible;
+  }
+  .side-col .section-tab {
+    width: 100%; justify-content: flex-start; text-align: left;
+    padding: 11px 12px; white-space: nowrap;
+  }
+  .side-col .section-tab .tab-count { margin-left: auto; }
+
+  /* Tablet / phone: stack the columns; navigation becomes a horizontal bar again */
+  @media (max-width: 900px) {
+    .app-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+    .side-col { position: sticky; top: 0; z-index: 20; }
+    .side-label { display: none; }
+    .side-col .section-tabs { flex-direction: row; overflow-x: auto; gap: 4px; }
+    .side-col .section-tab { width: auto; flex: 0 0 auto; }
+  }
+
+  /* Print: column 1 is hidden, content uses the full width (same as before) */
+  @media print {
+    .app-layout { display: block; margin-top: 0; }
+    .side-col { display: none !important; }
+  }

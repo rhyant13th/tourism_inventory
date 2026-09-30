@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tourism Enterprise &amp; Attraction Inventory</title>
+
+  <!-- External libraries (from the internet) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Firebase SDKs (Compat version) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+  <!-- Settings: admin email, logos, Firebase project keys -->
+  <script src="js/config.js"></script>
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Styles (order matters: later files override earlier ones) -->
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/analytics.css" />
+  <link rel="stylesheet" href="css/directory-print.css" />
+  <link rel="stylesheet" href="css/design-override.css" />
+  <link rel="stylesheet" href="css/records-print.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/dashboard-theme.css" />
+  <link rel="stylesheet" href="css/logo.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Logic files (plain JavaScript) -->
+  <script src="js/react-setup.js"></script>   <!-- React hooks -->
+  <script src="js/lists.js"></script>   <!-- dropdown lists & headings -->
+  <script src="js/helpers.js"></script>   <!-- small helpers -->
+  <script src="js/accreditation-logic.js"></script>   <!-- accreditation rules -->
+  <script src="js/excel-io.js"></script>   <!-- Excel import/export -->
+  <script src="js/cloud.js"></script>   <!-- Firebase save/load -->
+
+  <!-- Screen files (React JSX, compiled in the browser by Babel). Order matters: app.jsx must be LAST. -->
+  <script type="text/babel" data-presets="react" src="js/ui-components.jsx"></script>   <!-- shared screen parts -->
+  <script type="text/babel" data-presets="react" src="js/print-builders.jsx"></script>   <!-- print report data -->
+  <script type="text/babel" data-presets="react" src="js/establishments.jsx"></script>   <!-- Enterprises screen -->
+  <script type="text/babel" data-presets="react" src="js/attractions.jsx"></script>   <!-- Attractions screen -->
+  <script type="text/babel" data-presets="react" src="js/cbto.jsx"></script>   <!-- CBTO screen -->
+  <script type="text/babel" data-presets="react" src="js/directory.jsx"></script>   <!-- Directory screen -->
+  <script type="text/babel" data-presets="react" src="js/accreditation.jsx"></script>   <!-- Accreditation screen -->
+  <script type="text/babel" data-presets="react" src="js/records-print.jsx"></script>   <!-- print layout -->
+  <script type="text/babel" data-presets="react" src="js/backup.jsx"></script>   <!-- backup toolbar -->
+  <script type="text/babel" data-presets="react" src="js/login.jsx"></script>   <!-- login screen -->
+  <script type="text/babel" data-presets="react" src="js/analytics.jsx"></script>   <!-- Analytics screen -->
+  <script type="text/babel" data-presets="react" src="js/app.jsx"></script>   <!-- MAIN APP (keep LAST) -->
+</body>
+</html>

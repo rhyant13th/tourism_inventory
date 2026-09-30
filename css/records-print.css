@@ -1,0 +1,9 @@
+/* PRINTING: Enterprise / Accreditation / Attractions / CBTO print reports.
+   (Load order in index.html matters: later files override earlier ones.) */
+
+  /* ===== Records print reports (additive; extends the Directory print styles) ===== */
+  @media print {
+    .dir-print-root.rec-dense .dir-print-table th,
+    .dir-print-root.rec-dense .dir-print-table td { font-size: 7px; padding: 3px 3px; }
+    .dir-print-root .dir-print-table td div + div { margin-top: 2px; }
+  }
