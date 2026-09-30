@@ -912,6 +912,157 @@
       .dir-print-root .dir-print-table td div + div { margin-top: 2px; }
     }
   </style>
+  <style id="two-column-layout">
+    /* ===== TWO-COLUMN LAYOUT (additive; layout only) =====
+       Column 1 = section navigation (Enterprises, Accreditation, Attractions,
+       CBTOs, Directory, Analytics). Column 2 = backup toolbar + active section. */
+    .app-layout { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 20px; }
+    .side-col { position: sticky; top: 16px; align-self: start; }
+    .main-col { min-width: 0; }
+    .side-label { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--subtext); margin: 0 4px 8px; }
+
+    .side-col .section-tabs {
+      position: static; top: auto;
+      flex-direction: column; flex-wrap: nowrap; align-items: stretch;
+      gap: 4px; margin: 0; padding: 8px; overflow: visible;
+    }
+    .side-col .section-tab {
+      width: 100%; justify-content: flex-start; text-align: left;
+      padding: 11px 12px; white-space: nowrap;
+    }
+    .side-col .section-tab .tab-count { margin-left: auto; }
+
+    /* Tablet / phone: stack the columns; navigation becomes a horizontal bar again */
+    @media (max-width: 900px) {
+      .app-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+      .side-col { position: sticky; top: 0; z-index: 20; }
+      .side-label { display: none; }
+      .side-col .section-tabs { flex-direction: row; overflow-x: auto; gap: 4px; }
+      .side-col .section-tab { width: auto; flex: 0 0 auto; }
+    }
+
+    /* Print: column 1 is hidden, content uses the full width (same as before) */
+    @media print {
+      .app-layout { display: block; margin-top: 0; }
+      .side-col { display: none !important; }
+    }
+  </style>
+  <style id="dashboard-theme">
+    /* =====================================================================
+       DASHBOARD THEME — layout & colours copied from the reference screenshot
+       (dark top bar, dark left sidebar with grouped navigation, teal active
+       item, light-grey page, white rounded cards). Presentational only,
+       placed last so it wins by source order. No logic is touched.
+       ===================================================================== */
+    :root {
+      --paper:#FFFFFF; --paper-2:#F8FAFC; --ink:#1E293B; --ink-soft:#64748B; --rule:#E2E8F0;
+      --ledger-green:#0F766E; --ledger-green-2:#0D9488;
+      --brass:#F59E0B; --brass-soft:#FEF3C7;
+      --ok:#0F766E; --ok-soft:#CCFBF1; --warn:#B45309; --warn-soft:#FFFBEB;
+      --navy:#0F172A; --navy-deep:#020617; --teal:#0D9488; --teal-soft:#F0FDFA;
+      --gold:#F59E0B; --gold-soft:#FEF3C7; --gold-ink:#B45309;
+      --bg:#F1F5F9; --card:#FFFFFF; --border:#E2E8F0; --text:#1E293B; --subtext:#64748B;
+      --danger:#B91C1C; --danger-soft:#FEE2E2; --success:#0F766E;
+      --ring:0 0 0 3px rgba(20,184,166,.28);
+      --shadow-1:0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+      --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+      --font-display:'Inter','Segoe UI',ui-sans-serif,system-ui,-apple-system,sans-serif;
+      --font-mono:'Inter','Segoe UI',ui-sans-serif,system-ui,-apple-system,sans-serif;
+    }
+
+    @media screen {
+      body { background:#F1F5F9; color:#1E293B; font-family:'Inter','Segoe UI',ui-sans-serif,system-ui,-apple-system,sans-serif; }
+      h1, h2, h3 { font-family:'Inter','Segoe UI',ui-sans-serif,system-ui,sans-serif; }
+
+      /* ---- full-width shell ---- */
+      .app.app-shell { max-width:none; margin:0; padding:0; }
+
+      /* ---- top bar ---- */
+      .app-header { background:#020617; border-bottom:0; padding:14px 24px; align-items:center; gap:16px; flex-wrap:wrap; }
+      .app-header .app-brand { align-items:center; gap:14px; }
+      .app-header .app-brand::before {
+        content:""; width:44px; height:44px; margin-top:0; border-radius:10px; box-shadow:none;
+        background:#14B8A6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M7 15l4-4 3 3 5-6'/%3E%3C/svg%3E") center/24px 24px no-repeat;
+      }
+      .app-header .app-brand > div { display:flex; flex-direction:column; }
+      .app-header .eyebrow { order:0; color:#5EEAD4; font-size:10px; letter-spacing:1.5px; margin:0 0 2px; }
+      .app-header .title { order:1; color:#fff; font-size:20px; font-weight:700; letter-spacing:0; }
+      .app-header .subtitle { order:2; color:#2DD4BF; font-size:12px; margin:2px 0 0; max-width:none; }
+      .app-header .subtitle .author { color:#FACC15; font-weight:700; }
+      .app-header .subtitle .viewonly { color:#FCD34D; font-weight:600; }
+      .app-header .app-account { background:transparent; border:0; box-shadow:none; padding:0; margin-left:auto; gap:8px; }
+      .app-header .account-email { display:inline-flex; align-items:center; gap:8px; padding:5px 12px; border-radius:999px; font-size:12px; font-weight:600; color:#99F6E4; background:rgba(20,184,166,.16); border:1px solid rgba(45,212,191,.35); }
+      .app-header .pill-teal { background:#0D9488; color:#fff; }
+      .app-header .pill-grey { background:#334155; color:#E2E8F0; box-shadow:none; }
+      .app-header .btn { background:#1E293B; border:1px solid #334155; color:#F1F5F9; border-radius:8px; }
+      .app-header .btn:hover { background:#334155; }
+
+      /* ---- two columns: dark sidebar | light content ---- */
+      .app-layout { grid-template-columns:256px minmax(0,1fr); gap:0; align-items:stretch; margin-top:0; min-height:calc(100vh - 80px); }
+      .side-col { position:static; align-self:stretch; background:#0F172A; }
+      .side-inner { position:sticky; top:0; max-height:100vh; overflow-y:auto; padding:20px 16px 24px; }
+      .main-col { padding:24px; }
+
+      /* ---- sidebar navigation ---- */
+      .side-col .section-tabs { background:transparent; border:0; border-radius:0; padding:0; gap:4px; box-shadow:none; }
+      .nav-group { font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:#94A3B8; padding:0 8px; margin:22px 0 8px; }
+      .nav-group:first-child { margin-top:4px; }
+      .side-col .section-tab { font-family:'Inter','Segoe UI',sans-serif; font-size:14px; font-weight:600; color:#E2E8F0; padding:12px; gap:12px; border-radius:8px; }
+      .side-col .section-tab:hover:not(.active) { background:rgba(255,255,255,.07); color:#fff; }
+      .side-col .section-tab.active { background:#14B8A6; color:#fff; font-weight:700; box-shadow:none; }
+      .side-col .tab-count { font-family:'Inter','Segoe UI',sans-serif; font-size:11px; font-weight:600; border-radius:999px; background:rgba(255,255,255,.12); color:#CBD5E1; }
+      .side-col .section-tab.active .tab-count { background:rgba(255,255,255,.25); color:#fff; }
+      .nav-ic { width:18px; height:18px; flex:0 0 auto; }
+      .side-foot { margin-top:26px; padding-top:16px; border-top:1px solid #1E293B; font-size:12px; line-height:1.7; color:#94A3B8; }
+
+      /* ---- cards ---- */
+      .panel, .stat-card, .table-wrap, .filter-bar, .data-toolbar { background:#fff; border:1px solid #E2E8F0; border-radius:12px; box-shadow:0 1px 2px rgba(15,23,42,.06); }
+      .data-toolbar { padding:14px 18px; margin-bottom:16px; }
+      .stat-label { font-weight:600; letter-spacing:.5px; color:#64748B; }
+      .stat-value { font-family:'Inter','Segoe UI',sans-serif; font-weight:700; font-size:28px; color:#0F172A; }
+      .donut-hole b { font-family:'Inter','Segoe UI',sans-serif; font-weight:700; }
+      .panel-title { font-family:'Inter','Segoe UI',sans-serif; font-size:16px; font-weight:700; color:#0F172A; border-bottom:0; padding-bottom:0; }
+      .bar-count { font-family:'Inter','Segoe UI',sans-serif; font-weight:700; }
+      .bar-track { background:#F1F5F9; }
+
+      /* ---- tables ---- */
+      thead th, thead tr th { background:#F8FAFC; color:#64748B; font-weight:600; border-bottom:1px solid #E2E8F0; }
+      table tbody tr:hover { background:#F0FDFA; }
+
+      /* ---- buttons / accents ---- */
+      .btn-primary { background:#0D9488; border-color:#0D9488; }
+      .btn-primary:hover { background:#0F766E; border-color:#0F766E; }
+      .view-toggle { background:#F1F5F9; border-color:#E2E8F0; }
+      .view-toggle button.active { background:#0D9488; color:#fff; }
+      .analytics-report .ar-bar-fill { background:#0F766E; }
+      .analytics-report .ar-pill.active, .analytics-report .ar-btn-print { background:#0D9488; border-color:#0D9488; color:#fff; }
+
+      /* chart bar colours + inline icon strokes -> teal palette */
+      .bar-fill[style*="28, 107, 110"], .bar-fill[style*="1C6B6E" i] { background:#0F766E !important; }
+      .bar-fill[style*="192, 138, 46"], .bar-fill[style*="C08A2E" i] { background:#F59E0B !important; }
+      .bar-fill[style*="14, 59, 60"],   .bar-fill[style*="0E3B3C" i] { background:#1E293B !important; }
+      .bar-fill[style*="43, 122, 87"],  .bar-fill[style*="2B7A57" i] { background:#14B8A6 !important; }
+      svg[stroke="#1C6B6E"] { stroke:#0F766E; }
+      svg[stroke="#A8442D"] { stroke:#B91C1C; }
+      svg[stroke="#8A5F16"] { stroke:#B45309; }
+      svg[stroke="#5E6E6A"] { stroke:#64748B; }
+      svg[stroke="#fff"]    { stroke:#fff; }
+
+      /* ---- tablet / phone: sidebar becomes a horizontal bar ---- */
+      @media (max-width:900px) {
+        .app-layout { grid-template-columns:minmax(0,1fr); min-height:0; }
+        .side-col { position:sticky; top:0; z-index:20; align-self:auto; }
+        .side-inner { position:static; max-height:none; overflow:visible; padding:8px 12px; }
+        .nav-group, .side-foot { display:none; }
+        .side-col .section-tabs { flex-direction:row; overflow-x:auto; }
+        .side-col .section-tab { width:auto; flex:0 0 auto; padding:10px 14px; }
+        .main-col { padding:14px; }
+        .app-header { padding:12px 14px; }
+        .app-header .app-account { margin-left:0; }
+      }
+    }
+    @media print { .main-col { padding:0; } .app-layout { min-height:0; } }
+  </style>
 </head>
 <body>
   <div id="root"></div>
@@ -4118,7 +4269,7 @@
         return <LoginScreen />;
       }
 
-      return (<div className="app">
+      return (<div className="app app-shell">
         <div className="app-header">
           <div className="app-brand">
             <div>
@@ -4141,27 +4292,36 @@
           </div>
         </div>
 
+        <div className="app-layout">
+        <aside className="side-col">
+        <div className="side-inner">
         <div className="section-tabs">
+          <div className="nav-group">Data Categories</div>
           <button className={"section-tab " + (tab==="establishments"?"active":"")} onClick={()=>setTab("establishments")}>
-            Enterprises <span className="tab-count">{establishments.length}</span>
+            <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/></svg><span className="nav-text">Enterprises</span> <span className="tab-count">{establishments.length}</span>
           </button>
           <button className={"section-tab " + (tab==="accreditation"?"active":"")} onClick={()=>setTab("accreditation")}>
-            Accreditation <span className="tab-count">{establishments.length}</span>
+            <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span className="nav-text">Accreditation</span> <span className="tab-count">{establishments.length}</span>
           </button>
           <button className={"section-tab " + (tab==="attractions"?"active":"")} onClick={()=>setTab("attractions")}>
-            Attractions <span className="tab-count">{attractions.length}</span>
+            <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><span className="nav-text">Attractions</span> <span className="tab-count">{attractions.length}</span>
           </button>
           <button className={"section-tab " + (tab==="cbtos"?"active":"")} onClick={()=>setTab("cbtos")}>
-            CBTOs <span className="tab-count">{cbtos.length}</span>
+            <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8"/></svg><span className="nav-text">CBTOs</span> <span className="tab-count">{cbtos.length}</span>
           </button>
           <button className={"section-tab " + (tab==="officers"?"active":"")} onClick={()=>setTab("officers")}>
-            Directory <span className="tab-count">{officers.length}</span>
+            <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17c.6-1.8 2-2.7 3.5-2.7s2.9.9 3.5 2.7M15 9h3M15 13h3"/></svg><span className="nav-text">Directory</span> <span className="tab-count">{officers.length}</span>
           </button>
+          <div className="nav-group">Analytics &amp; Reports</div>
           <button className={"section-tab " + (tab==="analytics"?"active":"")} onClick={()=>setTab("analytics")}>
-            Analytics
+            <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span className="nav-text">Analytics</span>
           </button>
         </div>
+        <div className="side-foot">Provincial Tourism Office<br/>Firestore Cloud</div>
+        </div>
+        </aside>
 
+        <main className="main-col">
         <BackupToolbar
           establishments={establishments} attractions={attractions}
           setEstablishments={setEstablishments} setAttractions={setAttractions}
@@ -4187,6 +4347,8 @@
         {tab === "analytics" && (
           <AnalyticsSection establishments={establishments} attractions={attractions} cbtos={cbtos} />
         )}
+        </main>
+        </div>
       </div>);
     }
 
