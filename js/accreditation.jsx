@@ -222,6 +222,7 @@ function AccreditationSection({data, setData, isAdmin}){
     classification: CLASSIFICATIONS,
     type: [...new Set(data.map(d=>d.type))].sort(),
     accredStatus: ["Accredited","Expired","Not Accredited"],
+    year: [...new Set(data.flatMap(d=>establishmentAccreditedYears(d)))].sort(),
   }), [data]);
 
   const filtered = useMemo(()=>data.filter(d=>{
@@ -230,6 +231,7 @@ function AccreditationSection({data, setData, isAdmin}){
     if(filters.classification && d.classification!==filters.classification) return false;
     if(filters.type && d.type!==filters.type) return false;
     if(filters.accredStatus && getAccredState(d)!==filters.accredStatus) return false;
+    if(filters.year && !establishmentAccreditedYears(d).includes(filters.year)) return false;
     return true;
   }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
 
@@ -397,6 +399,7 @@ function AccreditationSection({data, setData, isAdmin}){
           {key:"classification", label:"Classification"},
           {key:"type", label:"Type"},
           {key:"accredStatus", label:"Accreditation"},
+          {key:"year", label:"Year"},
         ]} />
         <div className="table-wrap">
           <table>

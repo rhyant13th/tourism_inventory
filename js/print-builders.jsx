@@ -16,7 +16,7 @@ const ENTERPRISE_PRINT_FILTERS = [
 
 const ACCRED_PRINT_FILTERS = [
   {key:"name", label:"Enterprise"}, {key:"municipality", label:"Municipality"}, {key:"classification", label:"Classification"},
-  {key:"type", label:"Type"}, {key:"accredStatus", label:"Accreditation"},
+  {key:"type", label:"Type"}, {key:"accredStatus", label:"Accreditation"}, {key:"year", label:"Year"},
 ];
 
 const ATTRACTION_PRINT_FILTERS = [

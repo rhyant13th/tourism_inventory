@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "C:/Users/Victus Core i5/Downloads/tourism-inventory modula copy/js"
+		},
+		{
+			"path": "C:/Users/Victus Core i5/Downloads/tourism-inventory modula copy/css"
+		},
+		{
+			"path": "C:/Users/Victus Core i5/Downloads/tourism-inventory modula copy/assets"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "assets"
+	}
+}

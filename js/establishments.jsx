@@ -201,6 +201,9 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
 
 function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
   if(!item) return null;
+  const accredState = getAccredState(item);
+  const latestAccred = latestAccredEntry(item);
+  const accredHistory = sortAccredHistoryDesc(getAccredHistory(item));
   return (<div>
     <div className="view-readonly-banner"><Icon d={ICONS.eye} size={14} color="#1C6B6E" /> Read-only view — no changes can be made here. Use Edit to modify this record.</div>
     <div className="view-grid">
@@ -220,6 +223,41 @@ function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Year Established / Registered" value={item.year} />
       <ViewField label="Status of Enterprise" value={item.status==="Others" && item.statusOthers ? item.statusOthers : item.status} />
       <ViewField label="Registered on TourLISTA?" value={item.tourlista||"No"} />
+      <ViewField label="Status of Accreditation" value={accredState} />
+      {latestAccred && (<React.Fragment>
+        <ViewField label="Level of Accreditation" value={latestAccred.type} />
+        <ViewField label="Accreditation Number" value={latestAccred.number} />
+        <ViewField label="Accreditation Validity" value={latestAccred.validity ? formatDateDisplay(latestAccred.validity) : ""} />
+      </React.Fragment>)}
+    </div>
+
+    <div style={{marginTop:14}}>
+      <div className="view-field-label" style={{marginBottom:6}}>Accredited Years</div>
+      <div style={{display:"flex", flexWrap:"wrap", gap:6, marginBottom:16}}>
+        {establishmentAccreditedYears(item).length===0 ? (
+          <span style={{fontSize:12, color:"var(--subtext)"}}>No accreditation records on file.</span>
+        ) : establishmentAccreditedYears(item).map(y=><span key={y} className="pill pill-teal">{y}</span>)}
+      </div>
+      <div className="view-field-label" style={{marginBottom:6}}>Accreditation History</div>
+      {accredHistory.length===0 ? (
+        <div style={{fontSize:12, color:"var(--subtext)"}}>No accreditation history recorded.</div>
+      ) : (
+        <div className="table-wrap">
+          <table style={{minWidth:"auto"}}>
+            <thead><tr><th>Type</th><th>Number</th><th>Accreditation Date</th><th>Valid Until</th></tr></thead>
+            <tbody>
+              {accredHistory.map((h,idx)=>(
+                <tr key={idx} className={idx%2?"odd":""}>
+                  <td>{h.type||"—"}</td>
+                  <td>{h.number||"—"}</td>
+                  <td>{h.accredDate?formatDateDisplay(h.accredDate):"—"}</td>
+                  <td>{h.validity?formatDateDisplay(h.validity):"—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
 
     <div className="form-actions">
@@ -247,6 +285,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
     tourlista: TOURLISTA_OPTIONS,
     status: ESTAB_STATUSES,
     year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
+    accredStatus: ["Accredited","Expired","Not Accredited"],
   }), [data]);
 
   const filtered = useMemo(()=>data.filter(d=>{
@@ -257,6 +296,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
     if(filters.status && d.status!==filters.status) return false;
     if(filters.tourlista && (d.tourlista||"No")!==filters.tourlista) return false;
     if(filters.year && d.year!==filters.year) return false;
+    if(filters.accredStatus && getAccredState(d)!==filters.accredStatus) return false;
     return true;
   }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
 
@@ -358,6 +398,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
           {key:"status", label:"Status"},
           {key:"tourlista", label:"TourLISTA"},
           {key:"year", label:"Year"},
+          {key:"accredStatus", label:"Accreditation"},
         ]} />
         <div className="table-wrap">
           <table>
