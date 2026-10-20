@@ -432,18 +432,33 @@ function normalizeAccredHistory(list){
   return cleaned.sort((a,b)=> (a.validity||"").localeCompare(b.validity||""));
 }
 
+// First day an accreditation is counted from: its Date Accredited, or - when none is
+// on file - the start of the current year (if still valid) or of its validity year.
+function accredEntryStartISO(h){
+  if(h && h.accredDate) return h.accredDate;
+  if(!h || !h.validity) return "";
+  const today = todayISO();
+  return (h.validity >= today ? today.slice(0,4) : h.validity.slice(0,4)) + "-01-01";
+}
+
+// An accreditation counts in EVERY year (and month) from its start up to its Valid Until
+// month, e.g. valid until 2028 and started in 2026 -> counted in 2026, 2027 and 2028.
 function accredEntryCoverageYears(entry){
-  // No fixed-duration policy any more (Regular = 2 yrs / Basic = 1 yr was removed).
-  // A period covers exactly the calendar years between its Date Accredited and its
-  // Valid Until date. If no Date Accredited is on file, only the Valid Until year counts.
   const endY = yearOfISO(entry && entry.validity);
   if(endY===null) return [];
-  const startY = yearOfISO(entry && entry.accredDate);
-  if(startY===null) return [String(endY)];
-  const years = [];
+  const startY = yearOfISO(accredEntryStartISO(entry));
   const lo = Math.min(startY, endY), hi = Math.max(startY, endY);
+  const years = [];
   for(let y=lo; y<=hi; y++) years.push(String(y));
   return years;
+}
+
+function accredEntryCoversMonth(h, year, month){
+  const st = isoYM(accredEntryStartISO(h)), en = isoYM(h && h.validity);
+  if(!st || !en) return false;
+  const a = Number(st.y)*12 + st.m, b = Number(en.y)*12 + en.m;
+  const t = Number(year)*12 + Number(month);
+  return t >= Math.min(a,b) && t <= Math.max(a,b);
 }
 
 // UPDATED: Automatically fallback to top-level accreditation fields if accredHistory is empty
@@ -575,9 +590,8 @@ function validateAccredEntries(list, baselineList){
 // - accredited (Date Accredited) or expiring (Valid Until) inside the year / month, or
 // - (year only) the period is still running during that year.
 function accredPeriodInScope(h, year, month){
-  if(isoInPeriod(h.accredDate, year, month)) return true;
-  if(isoInPeriod(h.validity, year, month)) return true;
-  return !month && accredEntryCoverageYears(h).includes(String(year));
+  return month ? accredEntryCoversMonth(h, year, month)
+               : accredEntryCoverageYears(h).includes(String(year));
 }
 
 // Dashboard numbers for one year (each enterprise is counted once per card).
@@ -608,7 +622,7 @@ function accredMonthlyStats(list, year){
     const acc = new Set(), toE = new Set(), exp = new Set();
     list.forEach(d=>{
       getAccredHistory(d).forEach(h=>{
-        if(isoInPeriod(h.accredDate, year, m)) acc.add(d.id);
+        if(accredEntryCoversMonth(h, year, m)) acc.add(d.id);
         if(isoInPeriod(h.validity, year, m)){
           if(accredPeriodExpired(h)) exp.add(d.id); else toE.add(d.id);
         }
@@ -1555,7 +1569,7 @@ function buildAccreditationPrint(rows, filters){
       printCell(r.h && r.h.type), printCell(r.h && r.h.number),
       (r.h && r.h.accredDate) ? formatDateDisplay(r.h.accredDate) : "—",
       (r.h && r.h.validity) ? formatDateDisplay(r.h.validity) : "—",
-      r.status + (r.renewed ? " (Renewed)" : ""),
+      r.status,
     ]),
     colWidths: [4,18,9,10,11,8,11,9,9,11],
     dense: true,
@@ -1568,10 +1582,10 @@ function buildAccreditationMonthlyPrint(year, municipality, monthly, yearStats){
     title: "Accreditation Monthly Summary — " + year,
     filterText: "Year: " + year + "; Municipality: " + (municipality || "All"),
     total: yearStats.accredited.size,
-    headers: ["Month","Accredited / Renewed","To Expire","Expired"],
+    headers: ["Month","Accredited","To Expire","Expired"],
     rows: [
       ...monthly.map(m=>[m.month, m.accredited, m.toExpire, m.expired]),
-      [<strong key="t">Year total (enterprises)</strong>, <strong key="a">{yearStats.renewed.size}</strong>, <strong key="b">{yearStats.toExpire.size}</strong>, <strong key="c">{yearStats.expired.size}</strong>],
+      [<strong key="t">Year total (enterprises)</strong>, <strong key="a">{yearStats.accredited.size}</strong>, <strong key="b">{yearStats.toExpire.size}</strong>, <strong key="c">{yearStats.expired.size}</strong>],
     ],
     colWidths: [34,22,22,22],
     dense: false,
@@ -3606,22 +3620,21 @@ function AccreditationSection({data, setData, isAdmin}){
         </div>
 
         <div className="stat-cards">
-          <StatCard label={"Valid for " + statYear + " (through Dec 31)"} value={yearStats.valid.size} />
-          <StatCard label={"Accredited / Renewed in " + statYear} value={yearStats.renewed.size} />
+          <StatCard label={"Accredited in " + statYear} value={yearStats.accredited.size} />
+          <StatCard label={"Valid Through Dec 31, " + statYear} value={yearStats.valid.size} />
           <StatCard label={"To Expire in " + statYear} value={yearStats.toExpire.size} />
           <StatCard label={"Expired in " + statYear} value={yearStats.expired.size} />
-          <StatCard label={"Expired, Not Yet Renewed (" + statYear + ")"} value={yearStats.lapsed.size} />
         </div>
 
         <div className="charts-grid">
           <div className="panel span-2">
             <div className="panel-title">Monthly Monitoring — {statYear}</div>
             <div style={{fontSize:12, color:"var(--subtext)", marginBottom:10}}>
-              Accredited / Renewed counts by Date Accredited; To Expire and Expired count by Valid Until (To Expire = still valid today, Expired = already lapsed). An enterprise that expired and was accredited again in the same year appears in both columns.
+              An enterprise is Accredited in every month from its Date Accredited up to its Valid Until month (e.g. valid until 2028 = accredited in 2026, 2027 and 2028). To Expire and Expired count the month of the Valid Until date (To Expire = still valid today, Expired = already lapsed).
             </div>
             <div className="table-wrap">
               <table style={{minWidth:"auto"}}>
-                <thead><tr><th>Month</th><th>Accredited / Renewed</th><th>To Expire</th><th>Expired</th><th></th></tr></thead>
+                <thead><tr><th>Month</th><th>Accredited</th><th>To Expire</th><th>Expired</th><th></th></tr></thead>
                 <tbody>
                   {monthly.map((m,i)=>{
                     const isNow = String(new Date().getFullYear())===String(statYear) && m.month===currentMonthName;
@@ -3644,7 +3657,7 @@ function AccreditationSection({data, setData, isAdmin}){
                   })}
                   <tr style={{fontWeight:700}}>
                     <td>Year total (enterprises)</td>
-                    <td>{yearStats.renewed.size}</td>
+                    <td>{yearStats.accredited.size}</td>
                     <td>{yearStats.toExpire.size}</td>
                     <td>{yearStats.expired.size}</td>
                     <td></td>
@@ -3767,8 +3780,6 @@ function AccreditationSection({data, setData, isAdmin}){
                   <td>{r.h && r.h.validity ? formatDateDisplay(r.h.validity) : "—"}</td>
                   <td>
                     <Pill tone={accredStatusTone(r.status)}>{r.status}</Pill>
-                    {r.renewed && <div className="cell-sub">Renewed</div>}
-                    {r.accredIn && <div className="cell-sub">Accredited {filters.month ? "this month" : "in " + statYear}</div>}
                     {r.expiryIn && <div className="cell-sub">{r.status==="Expired" ? "Expired " : "Expires "}{filters.month ? "this month" : "in " + statYear}</div>}
                   </td>
                   <td>
