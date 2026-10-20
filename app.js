@@ -423,11 +423,12 @@ function normalizeAccredHistory(list){
     const number = String((h && h.number) || "").trim();
     const accredDate = String((h && h.accredDate) || "").trim();
     const validity = String((h && h.validity) || "").trim();
-    if(!type && !number && !accredDate && !validity) return;
-    const key = type + "|" + number + "|" + accredDate + "|" + validity;
+    const dotAsOf = String((h && h.dotAsOf) || "").trim();
+    if(!type && !number && !accredDate && !validity && !dotAsOf) return;
+    const key = type + "|" + number + "|" + accredDate + "|" + validity + "|" + dotAsOf;
     if(seen.has(key)) return;
     seen.add(key);
-    cleaned.push({ type, number, accredDate, validity });
+    cleaned.push({ type, number, accredDate, validity, dotAsOf });
   });
   return cleaned.sort((a,b)=> (a.validity||"").localeCompare(b.validity||""));
 }
@@ -568,7 +569,7 @@ function accredStatusTone(st){
 }
 
 function accredEntryKey(h){
-  return [h.type||"", h.number||"", h.accredDate||"", h.validity||""].join("|");
+  return [h.type||"", h.number||"", h.accredDate||"", h.validity||"", h.dotAsOf||""].join("|");
 }
 
 // Checks the accreditation periods typed in a form. Periods that were already on file
@@ -579,7 +580,6 @@ function validateAccredEntries(list, baselineList){
   for(const h of cleaned){
     if(known.has(accredEntryKey(h))) continue;
     if(!h.type) return "Please select the Level of Accreditation for each accreditation period.";
-    if(!h.accredDate) return "Please enter the Date Accredited for each accreditation period.";
     if(!h.validity) return "Please enter the Valid Until date for each accreditation period.";
     if(h.validity < h.accredDate) return "Valid Until cannot be earlier than the Date Accredited.";
   }
@@ -651,30 +651,36 @@ function accredExpiringSoon(list, days){
 
 // Rows of the Accreditation records list / print report: one row per accreditation period
 // in the selected year / month. Status "Not Accredited" lists enterprises with no period at all.
-function accredRecordRows(list, year, month, statusFilter){
-  if(statusFilter === "Not Accredited"){
-    return list.filter(d=>getAccredHistory(d).length===0)
-      .map(d=>({ d, h:null, status:"Not Accredited", renewed:false, accredIn:false, expiryIn:false }))
-      .sort((a,b)=>(a.d.municipality+a.d.name).localeCompare(b.d.municipality+b.d.name));
-  }
+function accredRecordRows(list, year, month, statusFilter, dotFilter){
+  const sel = Array.isArray(statusFilter) ? statusFilter : (statusFilter ? [statusFilter] : []);
+  const wantNone = sel.includes("Not Accredited");
+  const periodSel = sel.filter(x => x !== "Not Accredited");
   const rows = [];
-  list.forEach(d=>{
-    const hist = getAccredHistory(d);
-    hist.forEach(h=>{
-      if(!accredPeriodInScope(h, year, month)) return;
-      const status = accredPeriodStatus(h, year);
-      if(statusFilter && status !== statusFilter) return;
-      const renewed = hist.some(o => o!==h && o.validity && h.validity && o.validity > h.validity);
-      rows.push({
-        d, h, status, renewed,
-        accredIn: isoInPeriod(h.accredDate, year, month),
-        expiryIn: isoInPeriod(h.validity, year, month),
+  if(!(wantNone && periodSel.length===0)){
+    list.forEach(d=>{
+      const hist = getAccredHistory(d);
+      hist.forEach(h=>{
+        // Choosing a DOT list lists everything that came with that file (year / month do not limit it)
+        if(dotFilter){ if(h.dotAsOf !== dotFilter) return; }
+        else if(!accredPeriodInScope(h, year, month)) return;
+        const status = accredPeriodStatus(h, year);
+        if(periodSel.length && !periodSel.includes(status)) return;
+        rows.push({
+          d, h, status, renewed: false,
+          accredIn: isoInPeriod(h.accredDate, year, month),
+          expiryIn: isoInPeriod(h.validity, year, month),
+        });
       });
     });
-  });
+  }
+  if(wantNone && !dotFilter){
+    list.filter(d=>getAccredHistory(d).length===0).forEach(d=>{
+      rows.push({ d, h:null, status:"Not Accredited", renewed:false, accredIn:false, expiryIn:false });
+    });
+  }
   return rows.sort((a,b)=>
     (a.d.municipality + a.d.name).localeCompare(b.d.municipality + b.d.name) ||
-    (a.h.validity||"").localeCompare(b.h.validity||""));
+    ((a.h && a.h.validity)||"").localeCompare((b.h && b.h.validity)||""));
 }
 
 function accredEntrySortKey(entry){
@@ -699,7 +705,7 @@ function accredEntryLabel(h){
 
 function accredHistoryToText(list){
   return normalizeAccredHistory(list)
-    .map(h => [h.type||"", h.number||"", h.accredDate||"", h.validity||""].join("|"))
+    .map(h => [h.type||"", h.number||"", h.accredDate||"", h.validity||"", h.dotAsOf||""].join("|"))
     .join("; ");
 }
 
@@ -713,6 +719,7 @@ function parseAccredHistoryText(v){
       number: (parts[1]||"").trim(),
       accredDate: excelValueToISODate((parts[2]||"").trim()),
       validity: excelValueToISODate((parts[3]||"").trim()),
+      dotAsOf: excelValueToISODate((parts[4]||"").trim()),
     };
   }));
 }
@@ -1477,7 +1484,7 @@ const ENTERPRISE_PRINT_FILTERS = [
 const ACCRED_PRINT_FILTERS = [
   {key:"year", label:"Year"}, {key:"month", label:"Month"}, {key:"name", label:"Enterprise"},
   {key:"municipality", label:"Municipality"}, {key:"classification", label:"Classification"},
-  {key:"type", label:"Type"}, {key:"status", label:"Status"},
+  {key:"type", label:"Type"}, {key:"dot", label:"DOT List As Of"}, {key:"status", label:"Status"},
 ];
 
 const ATTRACTION_PRINT_FILTERS = [
@@ -1563,15 +1570,16 @@ function buildAccreditationPrint(rows, filters){
     title: notAccred ? "Accreditation Monitoring Report — Enterprises Not Accredited" : "Accreditation Monitoring Report — " + period,
     filterText: printFilterSummary(ACCRED_PRINT_FILTERS, filters) + summary,
     total: rows.length,
-    headers: ["No.","Name of Enterprise","Municipality","Classification","Type","Level of Accreditation","Accreditation Number","Date Accredited","Valid Until","Status"],
+    headers: ["No.","Name of Enterprise","Municipality","Classification","Type","Level of Accreditation","Accreditation Number","Date Accredited","Valid Until","DOT List As Of","Status"],
     rows: rows.map((r,i)=>[
       i+1, printCell(r.d.name), printCell(r.d.municipality), printCell(r.d.classification), printCell(r.d.type),
       printCell(r.h && r.h.type), printCell(r.h && r.h.number),
       (r.h && r.h.accredDate) ? formatDateDisplay(r.h.accredDate) : "—",
       (r.h && r.h.validity) ? formatDateDisplay(r.h.validity) : "—",
+      (r.h && r.h.dotAsOf) ? formatDateDisplay(r.h.dotAsOf) : "—",
       r.status,
     ]),
-    colWidths: [4,18,9,10,11,8,11,9,9,11],
+    colWidths: [4,16,8,9,10,8,11,8,8,8,10],
     dense: true,
   };
 }
@@ -1599,14 +1607,15 @@ function buildEnterpriseAccreditationPrint(d){
     title: "Accreditation Record",
     filterText: "Enterprise: " + (d.name||"—") + "; Municipality: " + (d.municipality||"—") + "; Type: " + (d.type||"—"),
     total: hist.length,
-    headers: ["No.","Level of Accreditation","Accreditation Number","Date Accredited","Valid Until","Status"],
+    headers: ["No.","Level of Accreditation","Accreditation Number","Date Accredited","Valid Until","DOT List As Of","Status"],
     rows: hist.map((h,i)=>[
       i+1, printCell(h.type), printCell(h.number),
       h.accredDate ? formatDateDisplay(h.accredDate) : "—",
       h.validity ? formatDateDisplay(h.validity) : "—",
+      h.dotAsOf ? formatDateDisplay(h.dotAsOf) : "—",
       accredPeriodStatus(h, ""),
     ]),
-    colWidths: [6,20,22,18,18,16],
+    colWidths: [5,17,20,15,15,15,13],
     dense: false,
   };
 }
@@ -1638,7 +1647,7 @@ function applyTourGuideAutoFields(obj){
 
 function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDirtyChange}){
   // A new enterprise starts with one empty accreditation row so the fields are visible right away.
-  const [f, setF] = useState(() => applyTourGuideAutoFields(initial ? {...initial, accredHistory: getAccredHistory(initial)} : {...emptyEstablishment, accredHistory: [{type:"", number:"", accredDate:"", validity:""}]}));
+  const [f, setF] = useState(() => applyTourGuideAutoFields(initial ? {...initial, accredHistory: getAccredHistory(initial)} : {...emptyEstablishment, accredHistory: [{type:"", number:"", accredDate:"", validity:"", dotAsOf:""}]}));
   const [dupeWarning, setDupeWarning] = useState(null);
   const [confirmSave, setConfirmSave] = useState(null);
   const initialSnapshotRef = useRef(applyTourGuideAutoFields(initial ? {...initial, accredHistory: getAccredHistory(initial)} : emptyEstablishment));
@@ -1670,7 +1679,7 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
   };
 
   const addHistoryEntry = () => {
-    setF(prev => ({...prev, accredHistory: [...(prev.accredHistory||[]), {type:"", number:"", accredDate:"", validity:""}]}));
+    setF(prev => ({...prev, accredHistory: [...(prev.accredHistory||[]), {type:"", number:"", accredDate:"", validity:"", dotAsOf:""}]}));
   };
   const updateHistoryEntry = (idx, key, value) => {
     setF(prev => {
@@ -1822,7 +1831,7 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
       <div style={{gridColumn:"1 / -1"}}>
         <Field label="Accreditation">
           <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
-            Leave blank if the enterprise is not accredited. Add one period for every accreditation or renewal — the Date Accredited and Valid Until dates are what the Accreditation tab uses to monitor the year and month.
+            Leave blank if the enterprise is not accredited. Add one period for every accreditation. DOT List As Of is the date of the DOT file where the enterprise first appeared (optional). Valid Until is required; Date Accredited is optional (if left blank, the accreditation is counted from the start of the current year up to its Valid Until month).
           </div>
           {(f.accredHistory||[]).map((h, idx)=>(
             <div key={idx} style={{display:"flex", gap:8, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap"}}>
@@ -1844,6 +1853,10 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
               <div style={{flex:"1 1 140px"}}>
                 <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Valid Until</div>
                 <input type="date" value={h.validity} onChange={(e)=>updateHistoryEntry(idx,"validity",e.target.value)} />
+              </div>
+              <div style={{flex:"1 1 140px"}}>
+                <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>DOT List As Of</div>
+                <input type="date" value={h.dotAsOf||""} onChange={(e)=>updateHistoryEntry(idx,"dotAsOf",e.target.value)} />
               </div>
               <button type="button" className="btn-ghost" onClick={()=>removeHistoryEntry(idx)} title="Remove this period">
                 <Icon d={ICONS.trash} color="#A8442D" />
@@ -3274,7 +3287,7 @@ function AccredHistoryTable({list}){
   return (
     <div className="table-wrap">
       <table style={{minWidth:"auto"}}>
-        <thead><tr><th>Level</th><th>Number</th><th>Date Accredited</th><th>Valid Until</th><th>Status</th></tr></thead>
+        <thead><tr><th>Level</th><th>Number</th><th>Date Accredited</th><th>Valid Until</th><th>DOT List As Of</th><th>Status</th></tr></thead>
         <tbody>
           {history.map((h,idx)=>{
             const st = accredPeriodStatus(h, "");
@@ -3284,6 +3297,7 @@ function AccredHistoryTable({list}){
                 <td>{h.number||"—"}</td>
                 <td>{h.accredDate?formatDateDisplay(h.accredDate):"—"}</td>
                 <td>{h.validity?formatDateDisplay(h.validity):"—"}</td>
+                <td>{h.dotAsOf?formatDateDisplay(h.dotAsOf):"—"}</td>
                 <td><Pill tone={accredStatusTone(st)}>{st}</Pill></td>
               </tr>
             );
@@ -3350,7 +3364,7 @@ function AccreditationForm({initial, onCancel, onSave, onDirtyChange}){
   }, [f]);
 
   const addHistoryEntry = () => {
-    setF(prev => ({...prev, accredHistory: [...(prev.accredHistory||[]), {type:"", number:"", accredDate:"", validity:""}]}));
+    setF(prev => ({...prev, accredHistory: [...(prev.accredHistory||[]), {type:"", number:"", accredDate:"", validity:"", dotAsOf:""}]}));
   };
   const updateHistoryEntry = (idx, key, value) => {
     setF(prev => {
@@ -3463,6 +3477,10 @@ function AccreditationForm({initial, onCancel, onSave, onDirtyChange}){
                 <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Valid Until</div>
                 <input type="date" value={h.validity} onChange={(e)=>updateHistoryEntry(idx,"validity",e.target.value)} />
               </div>
+              <div style={{flex:"1 1 140px"}}>
+                <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>DOT List As Of</div>
+                <input type="date" value={h.dotAsOf||""} onChange={(e)=>updateHistoryEntry(idx,"dotAsOf",e.target.value)} />
+              </div>
               <div style={{flex:"1 1 110px", fontSize:12, color:"var(--subtext)"}}>
                 {accredEntryCoverageYears(h).length>0 ? ("Covers: " + accredEntryCoverageYears(h).join(", ")) : ""}
               </div>
@@ -3485,6 +3503,37 @@ function AccreditationForm({initial, onCancel, onSave, onDirtyChange}){
       <button className="btn btn-primary" onClick={submit}>Save Changes</button>
     </div>
   </div>);
+}
+
+// Dropdown with checkboxes: pick one, several, or none (none = all).
+function MultiSelectFilter({options, value, onChange, allLabel}){
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(()=>{
+    const h = (e) => { if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return ()=>document.removeEventListener("mousedown", h);
+  }, []);
+  const sel = Array.isArray(value) ? value : [];
+  const toggle = (o) => onChange(sel.includes(o) ? sel.filter(x=>x!==o) : [...sel, o]);
+  const label = sel.length===0 ? allLabel : (sel.length<=2 ? sel.join(", ") : sel.length + " selected");
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <button type="button" className="btn" style={{width:"100%", justifyContent:"space-between", textAlign:"left"}} onClick={()=>setOpen(o=>!o)}>
+        <span>{label}</span><span>▾</span>
+      </button>
+      {open && (
+        <div style={{position:"absolute", zIndex:30, top:"100%", left:0, minWidth:"100%", background:"#fff", color:"#1f2937", border:"1px solid #cbd5e1", borderRadius:8, padding:6, boxShadow:"0 6px 18px rgba(0,0,0,.15)"}}>
+          {options.map(o=>(
+            <label key={o} style={{display:"flex", gap:8, alignItems:"center", padding:"6px 8px", cursor:"pointer", fontSize:13, whiteSpace:"nowrap"}}>
+              <input type="checkbox" checked={sel.includes(o)} onChange={()=>toggle(o)} style={{width:"auto"}} />{o}
+            </label>
+          ))}
+          {sel.length>0 && <button type="button" className="clear-btn" onClick={()=>onChange([])}>Clear</button>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AccreditationSection({data, setData, isAdmin}){
@@ -3540,12 +3589,28 @@ function AccreditationSection({data, setData, isAdmin}){
       if(filters.type && d.type!==filters.type) return false;
       return true;
     });
-    return accredRecordRows(ents, statYear, monthNum, filters.status);
+    return accredRecordRows(ents, statYear, monthNum, filters.status, filters.dot);
   }, [data, filters, statYear, monthNum]);
+  const dotOptions = useMemo(()=>{
+    const ds = new Set();
+    data.forEach(d=>getAccredHistory(d).forEach(h=>{ if(h.dotAsOf) ds.add(h.dotAsOf); }));
+    return Array.from(ds).sort().reverse();
+  }, [data]);
+  // Enterprises that came with each DOT list received in the selected year
+  const dotSummary = useMemo(()=>{
+    const m = {};
+    scoped.forEach(d=>getAccredHistory(d).forEach(h=>{
+      if(h.dotAsOf && isoInPeriod(h.dotAsOf, statYear, "")){ (m[h.dotAsOf] = m[h.dotAsOf] || new Set()).add(d.id); }
+    }));
+    return Object.entries(m).map(([date,set])=>({date, count:set.size})).sort((a,b)=>a.date.localeCompare(b.date));
+  }, [scoped, statYear]);
+  const statusSel = Array.isArray(filters.status) ? filters.status : [];
+  const onlyNotAccred = statusSel.length===1 && statusSel[0]==="Not Accredited";
 
   const printFilters = {
     year: statYear, month: filters.month, name: filters.name, municipality: filters.municipality,
-    classification: filters.classification, type: filters.type, status: filters.status,
+    classification: filters.classification, type: filters.type, status: statusSel.join(", "),
+    dot: filters.dot ? formatDateDisplay(filters.dot) : "",
   };
 
   // Saves only the accreditation history onto the existing enterprise record.
@@ -3693,6 +3758,28 @@ function AccreditationSection({data, setData, isAdmin}){
             )}
           </div>
 
+          <div className="panel span-2">
+            <div className="panel-title">DOT Lists Received in {statYear}</div>
+            {dotSummary.length===0 ? (
+              <div style={{fontSize:13, color:"var(--subtext)"}}>No DOT list dates encoded for {statYear}. Fill in "DOT List As Of" in an enterprise's accreditation to track each DOT file.</div>
+            ) : (
+              <div className="table-wrap">
+                <table style={{minWidth:"auto"}}>
+                  <thead><tr><th>DOT List As Of</th><th>Enterprises Added</th><th></th></tr></thead>
+                  <tbody>
+                    {dotSummary.map((r,i)=>(
+                      <tr key={r.date} className={i%2?"odd":""}>
+                        <td>{formatDateDisplay(r.date)}</td>
+                        <td>{r.count}</td>
+                        <td><button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFilters({dot: r.date, ...(statMunicipality ? {municipality: statMunicipality} : {})}); setView("records"); }}>View records</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           <div className="panel">
             <div className="panel-title">Accredited for {statYear} by Type</div>
             {accreditedByType.length===0
@@ -3750,22 +3837,27 @@ function AccreditationSection({data, setData, isAdmin}){
             </select>
           </div>
           <div className="filter-field">
-            <div className="filter-field-label">Status</div>
-            <select value={filters.status||""} onChange={(e)=>updateFilter("status", e.target.value)}>
+            <div className="filter-field-label">DOT List As Of</div>
+            <select value={filters.dot||""} onChange={(e)=>updateFilter("dot", e.target.value)}>
               <option value="">All</option>
-              {["Valid","To Expire","Expired","Not Accredited"].map(o=><option key={o} value={o}>{o}</option>)}
+              {dotOptions.map(o=><option key={o} value={o}>{formatDateDisplay(o)}</option>)}
             </select>
+          </div>
+          <div className="filter-field">
+            <div className="filter-field-label">Status</div>
+            <MultiSelectFilter options={["Valid","To Expire","Expired","Not Accredited"]} value={statusSel} onChange={(v)=>updateFilter("status", v)} allLabel="All" />
           </div>
           <button className="clear-btn" onClick={()=>setFilters({})}>Clear filters</button>
         </div>
         <div style={{fontSize:12, color:"var(--subtext)", margin:"8px 0"}}>
-          {filters.status==="Not Accredited"
+          {onlyNotAccred
             ? "Showing enterprises with no accreditation on file (Year and Month do not apply)."
+            : filters.dot ? "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " that came with the DOT list as of " + formatDateDisplay(filters.dot) + "."
             : "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " for " + (filters.month ? filters.month + " " : "") + statYear + ". Year is required; Month is optional."}
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr>{["Enterprise","Municipality","Type","Level / Accreditation No.","Date Accredited","Valid Until","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Enterprise","Municipality","Type","Level / Accreditation No.","Date Accredited","Valid Until","DOT List As Of","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
             <tbody>
               {records.map((r,i)=>(
                 <tr key={r.d.id + "-" + (r.h ? accredEntryKey(r.h) : "none") + "-" + i} className={i%2?"odd":""}>
@@ -3778,6 +3870,7 @@ function AccreditationSection({data, setData, isAdmin}){
                   </td>
                   <td>{r.h && r.h.accredDate ? formatDateDisplay(r.h.accredDate) : "—"}</td>
                   <td>{r.h && r.h.validity ? formatDateDisplay(r.h.validity) : "—"}</td>
+                  <td>{r.h && r.h.dotAsOf ? formatDateDisplay(r.h.dotAsOf) : "—"}</td>
                   <td>
                     <Pill tone={accredStatusTone(r.status)}>{r.status}</Pill>
                     {r.expiryIn && <div className="cell-sub">{r.status==="Expired" ? "Expired " : "Expires "}{filters.month ? "this month" : "in " + statYear}</div>}
@@ -3796,7 +3889,7 @@ function AccreditationSection({data, setData, isAdmin}){
                   </td>
                 </tr>
               ))}
-              {records.length===0 && <tr><td colSpan="8" className="empty-row">No accreditation records match these filters.</td></tr>}
+              {records.length===0 && <tr><td colSpan="9" className="empty-row">No accreditation records match these filters.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -3848,7 +3941,10 @@ function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths
   useEffect(()=>{
     const st = document.createElement("style");
     st.id = "rec-page-style";
-    st.textContent = "@page { margin: 12mm; }";
+    st.textContent = "@page { margin: 12mm; } " +
+      ".dir-print-root table.dir-print-table { table-layout: fixed !important; width: 100% !important; } " +
+      ".dir-print-root .dir-print-table th, .dir-print-root .dir-print-table td { white-space: normal !important; overflow-wrap: anywhere !important; word-break: break-word !important; overflow: hidden; vertical-align: top; } " +
+      ".dir-print-root .dir-print-table td *, .dir-print-root .dir-print-table th * { white-space: normal !important; overflow-wrap: anywhere !important; max-width: 100%; }";
     document.head.appendChild(st);
     document.body.classList.add("printing-directory");
     const cleanup = () => {
