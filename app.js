@@ -433,10 +433,11 @@ function normalizeAccredHistory(list){
   return cleaned.sort((a,b)=> (a.validity||"").localeCompare(b.validity||""));
 }
 
-// First day an accreditation is counted from: its Date Accredited, or - when none is
-// on file - the start of the current year (if still valid) or of its validity year.
+// First day an accreditation is counted from: its Date Accredited, else the date of the
+// DOT list it came with, else (when neither is on file) the start of the current year (if still valid) or of its validity year.
 function accredEntryStartISO(h){
   if(h && h.accredDate) return h.accredDate;
+  if(h && h.dotAsOf) return h.dotAsOf;
   if(!h || !h.validity) return "";
   const today = todayISO();
   return (h.validity >= today ? today.slice(0,4) : h.validity.slice(0,4)) + "-01-01";
@@ -446,7 +447,11 @@ function accredEntryStartISO(h){
 // month, e.g. valid until 2028 and started in 2026 -> counted in 2026, 2027 and 2028.
 function accredEntryCoverageYears(entry){
   const endY = yearOfISO(entry && entry.validity);
-  if(endY===null) return [];
+  if(endY===null){
+    // no Valid Until on file: counted only in the year of its Date Accredited / DOT list
+    const y0 = yearOfISO(accredEntryStartISO(entry));
+    return y0===null ? [] : [String(y0)];
+  }
   const startY = yearOfISO(accredEntryStartISO(entry));
   const lo = Math.min(startY, endY), hi = Math.max(startY, endY);
   const years = [];
@@ -456,7 +461,8 @@ function accredEntryCoverageYears(entry){
 
 function accredEntryCoversMonth(h, year, month){
   const st = isoYM(accredEntryStartISO(h)), en = isoYM(h && h.validity);
-  if(!st || !en) return false;
+  if(!st) return false;
+  if(!en) return String(year)===st.y && Number(month) >= st.m;   // no validity: from its start month to December of that year
   const a = Number(st.y)*12 + st.m, b = Number(en.y)*12 + en.m;
   const t = Number(year)*12 + Number(month);
   return t >= Math.min(a,b) && t <= Math.max(a,b);
@@ -559,6 +565,7 @@ function accredPeriodExpired(h){
 //   Valid      = still valid and does not expire in the selected year
 function accredPeriodStatus(h, year){
   if(!h) return "Not Accredited";
+  if(!h.validity) return "No Validity";
   if(accredPeriodExpired(h)) return "Expired";
   if(year && h.validity && isoInPeriod(h.validity, year, "")) return "To Expire";
   return "Valid";
@@ -580,8 +587,8 @@ function validateAccredEntries(list, baselineList){
   for(const h of cleaned){
     if(known.has(accredEntryKey(h))) continue;
     if(!h.type) return "Please select the Level of Accreditation for each accreditation period.";
-    if(!h.validity) return "Please enter the Valid Until date for each accreditation period.";
-    if(h.validity < h.accredDate) return "Valid Until cannot be earlier than the Date Accredited.";
+    if(!h.accredDate && !h.dotAsOf && !h.validity) return "Please enter at least one date for each accreditation period (Date Accredited, DOT List As Of or Valid Until) so it can be counted in the right year.";
+    if(h.accredDate && h.validity && h.validity < h.accredDate) return "Valid Until cannot be earlier than the Date Accredited.";
   }
   return "";
 }
@@ -1831,7 +1838,7 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
       <div style={{gridColumn:"1 / -1"}}>
         <Field label="Accreditation">
           <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
-            Leave blank if the enterprise is not accredited. Add one period for every accreditation. DOT List As Of is the date of the DOT file where the enterprise first appeared (optional). Valid Until is required; Date Accredited is optional (if left blank, the accreditation is counted from the start of the current year up to its Valid Until month).
+            Leave blank if the enterprise is not accredited. Add one period for every accreditation. Enter at least one date. DOT List As Of = date of the DOT file where the enterprise first appeared. An accreditation is counted from its Date Accredited (or, if blank, its DOT List As Of date) up to its Valid Until month; with no Valid Until, it is counted only in the year of that date.
           </div>
           {(f.accredHistory||[]).map((h, idx)=>(
             <div key={idx} style={{display:"flex", gap:8, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap"}}>
@@ -3695,7 +3702,7 @@ function AccreditationSection({data, setData, isAdmin}){
           <div className="panel span-2">
             <div className="panel-title">Monthly Monitoring — {statYear}</div>
             <div style={{fontSize:12, color:"var(--subtext)", marginBottom:10}}>
-              An enterprise is Accredited in every month from its Date Accredited up to its Valid Until month (e.g. valid until 2028 = accredited in 2026, 2027 and 2028). To Expire and Expired count the month of the Valid Until date (To Expire = still valid today, Expired = already lapsed).
+              An enterprise is Accredited in every month from its Date Accredited (or DOT list date) up to its Valid Until month (e.g. DOT list Sep 2021, valid until Jul 2022 = accredited in 2021 and 2022). With no Valid Until, it counts only in the year of its DOT list / Date Accredited. To Expire and Expired count the month of the Valid Until date (To Expire = still valid today, Expired = already lapsed).
             </div>
             <div className="table-wrap">
               <table style={{minWidth:"auto"}}>
@@ -3845,7 +3852,7 @@ function AccreditationSection({data, setData, isAdmin}){
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Status</div>
-            <MultiSelectFilter options={["Valid","To Expire","Expired","Not Accredited"]} value={statusSel} onChange={(v)=>updateFilter("status", v)} allLabel="All" />
+            <MultiSelectFilter options={["Valid","To Expire","Expired","No Validity","Not Accredited"]} value={statusSel} onChange={(v)=>updateFilter("status", v)} allLabel="All" />
           </div>
           <button className="clear-btn" onClick={()=>setFilters({})}>Clear filters</button>
         </div>
