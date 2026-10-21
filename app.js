@@ -268,8 +268,18 @@ const CALENDAR_MONTHS = ["January","February","March","April","May","June","July
 const CALENDAR_LOCATIONS = [...MUNICIPALITIES, "Province-wide", "Multiple Municipalities"].sort(compareLGU);
 const CALENDAR_CATEGORIES = ["Festival","Founding Anniversary","Feast / Fiesta","Parade / Procession","Trade Fair / Market","Observance / Awareness","Christmas / Holiday","Commemoration","Other"];
 const CALENDAR_STATUSES = ["Scheduled","Tentative","Postponed","Cancelled","Completed"];
+// The three calendars shown as tabs on the Calendar screen.
+//  tourism    = Tourism Office Calendar of Activities (has a year: different activities each year)
+//  provincial = Provincial and Municipal Calendar of Activities (no year: annual celebrations)
+//  arawatan   = Arawatan Calendar of Activities (has a year and one theme per year)
+const CALENDAR_TYPES = [
+  {key:"tourism",    label:"Tourism Office Calendar of Activities"},
+  {key:"provincial", label:"Provincial and Municipal Calendar of Activities"},
+  {key:"arawatan",   label:"Arawatan Calendar of Activities"},
+];
+const CALENDAR_TYPE_LABEL = Object.fromEntries(CALENDAR_TYPES.map(t=>[t.key, t.label]));
 const CALENDAR_HEADERS = [
-  "No.","Year","Month","Date","Activity / Event","Municipality / Venue","Other Location Details",
+  "No.","Calendar Type","Year","Month","Date","Activity / Event","Municipality / Venue","Other Location Details",
   "Category","Status","Description",
 ];
 
@@ -1195,8 +1205,14 @@ function calendarDayKey(dateText){
   return m ? parseInt(m[1], 10) : 100;
 }
 
+// Records saved before the calendar types existed have no type: they are the Provincial and Municipal calendar.
+function calendarTypeOf(d){
+  return d && (d.calendarType==="tourism" || d.calendarType==="arawatan") ? d.calendarType : "provincial";
+}
+
 function compareCalendarEvents(a, b){
-  const ya = parseInt(a.year, 10) || 0, yb = parseInt(b.year, 10) || 0;
+  const yr = d => calendarTypeOf(d)==="provincial" ? 0 : (parseInt(d.year, 10) || 0);   // provincial = annual, no year
+  const ya = yr(a), yb = yr(b);
   if(ya !== yb) return ya - yb;
   const ma = CALENDAR_MONTHS.indexOf(a.month), mb = CALENDAR_MONTHS.indexOf(b.month);
   if(ma !== mb) return ma - mb;
@@ -1212,12 +1228,14 @@ function calendarLocation(d){
 }
 
 function calendarEventKey(d){
-  return [d.year, d.month, d.dateText, d.title, d.municipality].map(normalizeKey).join("|");
+  const t = calendarTypeOf(d);
+  return [t, t==="provincial" ? "" : d.year, d.month, d.dateText, d.title, d.municipality].map(normalizeKey).join("|");
 }
 
 function buildCalendarRows(list){
   return list.map((d,i)=>[
-    i+1, d.year||"", d.month||"", d.dateText||"", d.title||"", d.municipality||"",
+    i+1, CALENDAR_TYPE_LABEL[calendarTypeOf(d)], calendarTypeOf(d)==="provincial" ? "" : (d.year||""),
+    d.month||"", d.dateText||"", d.title||"", d.municipality||"",
     d.locationNote||"", d.category||"", d.status||"", d.description||"",
   ]);
 }
@@ -1230,13 +1248,16 @@ function parseCalendarRow(row){
   // Excel may turn a text like "1-3" into a date; keep just the day number in that case.
   let dateText = row["Date"];
   if(dateText instanceof Date) dateText = String(dateText.getDate());
+  const typeLabel = matchFromList(row["Calendar Type"], CALENDAR_TYPES.map(t=>t.label));
+  const typeKey = (CALENDAR_TYPES.find(t=>t.label===typeLabel) || {key:"provincial"}).key;   // no type column = Provincial and Municipal
   return {
-    year: String(row["Year"]||"").trim() || String(new Date().getFullYear()),
+    calendarType: typeKey,
+    year: typeKey==="provincial" ? "" : (String(row["Year"]||"").trim() || String(new Date().getFullYear())),
     month, municipality,
     dateText: String(dateText||"").trim(),
     title,
     locationNote: String(row["Other Location Details"]||"").trim(),
-    category: matchFromList(row["Category"], CALENDAR_CATEGORIES) || "Other",
+    category: typeKey==="arawatan" ? "" : (matchFromList(row["Category"], CALENDAR_CATEGORIES) || "Other"),
     status: matchFromList(row["Status"], CALENDAR_STATUSES) || "Scheduled",
     description: String(row["Description"]||"").trim(),
   };
@@ -1247,7 +1268,7 @@ function calendarSeedRecords(existing){
   const have = new Set(existing.map(calendarEventKey));
   const out = [];
   CALENDAR_2025_SEED.forEach((e, i) => {
-    const rec = { ...e, year: "2025" };
+    const rec = { ...e, calendarType: "provincial", year: "" };
     if(have.has(calendarEventKey(rec))) return;
     have.add(calendarEventKey(rec));
     out.push({ ...rec, id: "CAL-2025-" + String(i+1).padStart(3, "0") });
@@ -1272,10 +1293,11 @@ function withTimeout(promise, ms, label){
   ]);
 }
 
-async function saveInventoryToCloud(establishments, attractions, cbtos, officers, calendar, directoryCategories){
+async function saveInventoryToCloud(establishments, attractions, cbtos, officers, calendar, directoryCategories, arawatanThemes){
   await withTimeout(CLOUD_DOC().set({
     establishments, attractions, cbtos: cbtos||[], officers: officers||[], calendar: calendar||[],
     directoryCategories: (directoryCategories && directoryCategories.length) ? directoryCategories : DIRECTORY_CATEGORIES,
+    arawatanThemes: arawatanThemes || {},
     updatedAt: new Date().toISOString(),
   }), 15000, "Saving");
 }
@@ -1583,18 +1605,37 @@ function buildCbtosPrint(list, filters){
 }
 
 // Calendar of Activities: one row per activity, in date order (the list passed in is already sorted).
-function buildCalendarPrint(list, filters){
-  return {
-    title: "Calendar of Activities" + (filters && filters.year ? " " + filters.year : ""),
+function buildCalendarPrint(list, filters, calType, themes){
+  const type = calType || "tourism";
+  const th = themes || {};
+  const year = filters && filters.year ? " " + filters.year : "";
+  const common = d => [printCell(d.month), printCell(d.dateText), printCell(d.title), printCell(calendarLocation(d))];
+  const base = {
+    title: CALENDAR_TYPE_LABEL[type] + (type==="provincial" ? "" : year),
     filterText: printFilterSummary(CALENDAR_PRINT_FILTERS, filters),
     total: list.length,
-    headers: ["No.","Year","Month","Date","Activity / Event","Municipality / Venue","Category","Status","Description"],
-    rows: list.map((d,i)=>[
-      i+1, printCell(d.year), printCell(d.month), printCell(d.dateText), printCell(d.title),
-      printCell(calendarLocation(d)), printCell(d.category), printCell(d.status), printCell(d.description),
-    ]),
-    colWidths: [4,5,8,9,19,11,10,7,27],
     dense: false,
+  };
+  if(type==="provincial"){
+    return { ...base,
+      headers: ["No.","Month","Date","Activity / Event","Municipality / Venue","Category","Status","Description"],
+      rows: list.map((d,i)=>[i+1, ...common(d), printCell(d.category), printCell(d.status), printCell(d.description)]),
+      colWidths: [4,8,9,21,13,11,7,27],
+    };
+  }
+  if(type==="arawatan"){
+    const theme = filters && filters.year ? th[filters.year] : "";
+    return { ...base,
+      filterText: (theme ? "Theme: " + theme + "; " : "") + base.filterText,
+      headers: ["No.","Year","Theme","Month","Date","Activity","Venue","Status","Description"],
+      rows: list.map((d,i)=>[i+1, printCell(d.year), printCell(th[d.year]), ...common(d), printCell(d.status), printCell(d.description)]),
+      colWidths: [4,5,16,8,8,17,11,7,24],
+    };
+  }
+  return { ...base,
+    headers: ["No.","Year","Month","Date","Activity / Event","Municipality / Venue","Category","Status","Description"],
+    rows: list.map((d,i)=>[i+1, printCell(d.year), ...common(d), printCell(d.category), printCell(d.status), printCell(d.description)]),
+    colWidths: [4,5,8,9,19,11,10,7,27],
   };
 }
 
@@ -3127,18 +3168,29 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
  */
 
 const emptyCalendarEvent = {
+  calendarType: "tourism",
   year: String(new Date().getFullYear()), month: "", dateText: "", title: "",
   municipality: "", locationNote: "", category: "Festival", status: "Scheduled", description: "",
 };
 
-function CalendarForm({initial, onCancel, onSave}){
-  const [f, setF] = useState(initial || emptyCalendarEvent);
+function CalendarForm({initial, onCancel, onSave, calType, defaultYear}){
+  const [f, setF] = useState(() => initial
+    ? {...initial, calendarType: calendarTypeOf(initial)}
+    : {...emptyCalendarEvent, calendarType: calType, year: defaultYear || emptyCalendarEvent.year,
+       month: calType==="arawatan" ? "November" : "", category: calType==="arawatan" ? "" : "Festival"});
+  const type = f.calendarType;
   const set = (k) => (e) => {
     const v = e && e.target ? e.target.value : e;
     setF(prev=>({...prev, [k]: v}));
   };
+  const setType = (e) => {
+    const v = e.target.value;
+    setF(prev=>({...prev, calendarType: v,
+      year: v!=="provincial" && !prev.year ? (defaultYear || emptyCalendarEvent.year) : prev.year,
+      category: v==="arawatan" ? "" : (prev.category || "Festival")}));
+  };
   const submit = () => {
-    if(!/^\d{4}$/.test(String(f.year||"").trim())){
+    if(type!=="provincial" && !/^\d{4}$/.test(String(f.year||"").trim())){
       alert("Please enter the year as 4 digits, e.g. 2026.");
       return;
     }
@@ -3146,11 +3198,23 @@ function CalendarForm({initial, onCancel, onSave}){
       alert("Please complete the month, the name of the activity, and the municipality.");
       return;
     }
-    onSave({...f, year: String(f.year).trim(), title: f.title.trim(), dateText: String(f.dateText||"").trim()});
+    onSave({...f,
+      year: type==="provincial" ? "" : String(f.year).trim(),
+      category: type==="arawatan" ? "" : (f.category || "Other"),
+      title: f.title.trim(), dateText: String(f.dateText||"").trim()});
   };
   return (<div>
     <div className="form-grid">
-      <Field label="Year" required><input type="text" inputMode="numeric" value={f.year} onChange={set("year")} placeholder="e.g. 2026" /></Field>
+      <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Calendar Type" required>
+          <select value={type} onChange={setType}>
+            {CALENDAR_TYPES.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}
+          </select>
+        </Field>
+      </div>
+      {type!=="provincial" && (
+        <Field label="Year" required><input type="text" inputMode="numeric" value={f.year} onChange={set("year")} placeholder="e.g. 2026" /></Field>
+      )}
       <Field label="Month" required>
         <select value={f.month} onChange={set("month")}>
           <option value="">Select month</option>
@@ -3161,20 +3225,22 @@ function CalendarForm({initial, onCancel, onSave}){
         <Field label="Date"><input type="text" value={f.dateText} onChange={set("dateText")} placeholder="e.g. 18-20, 27, Tentative, Whole month, 1st week" /></Field>
       </div>
       <div style={{gridColumn:"1 / -1"}}>
-        <Field label="Name of Activity / Event" required><input type="text" value={f.title} onChange={set("title")} placeholder="e.g. Dugoy Festival" /></Field>
+        <Field label="Name of Activity / Event" required><input type="text" value={f.title} onChange={set("title")} placeholder={type==="arawatan" ? "e.g. Grand Parade" : "e.g. Dugoy Festival"} /></Field>
       </div>
-      <Field label="Municipality / Venue" required>
+      <Field label={type==="arawatan" ? "Municipality / Venue" : "Municipality / Venue"} required>
         <select value={f.municipality} onChange={set("municipality")}>
           <option value="">Select municipality</option>
           {CALENDAR_LOCATIONS.map(m=><option key={m} value={m}>{m}</option>)}
         </select>
       </Field>
       <Field label="Other Location Details"><input type="text" value={f.locationNote} onChange={set("locationNote")} placeholder="e.g. San Jose & Sta. Cruz (optional)" /></Field>
-      <Field label="Category">
-        <select value={f.category} onChange={set("category")}>
-          {CALENDAR_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-      </Field>
+      {type!=="arawatan" && (
+        <Field label="Category">
+          <select value={f.category} onChange={set("category")}>
+            {CALENDAR_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </Field>
+      )}
       <Field label="Status">
         <select value={f.status} onChange={set("status")}>
           {CALENDAR_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
@@ -3191,28 +3257,56 @@ function CalendarForm({initial, onCancel, onSave}){
   </div>);
 }
 
+// Arawatan: one theme per year.
+function ArawatanThemeForm({initialYear, initialTheme, lockYear, onCancel, onSave}){
+  const [year, setYear] = useState(initialYear || String(new Date().getFullYear()));
+  const [theme, setTheme] = useState(initialTheme || "");
+  const submit = () => {
+    if(!/^\d{4}$/.test(String(year).trim())){ alert("Please enter the year as 4 digits, e.g. 2026."); return; }
+    onSave(String(year).trim(), theme.trim());
+  };
+  return (<div>
+    <div className="form-grid">
+      <Field label="Year" required><input type="text" inputMode="numeric" value={year} disabled={!!lockYear} onChange={e=>setYear(e.target.value)} placeholder="e.g. 2026" /></Field>
+      <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Theme"><textarea rows={2} value={theme} autoFocus onChange={e=>setTheme(e.target.value)} placeholder="Theme of the Arawatan celebration for this year" /></Field>
+      </div>
+    </div>
+    <div style={{fontSize:11, color:"var(--subtext)", marginTop:6}}>Leave the theme blank to remove it for this year.</div>
+    <div className="form-actions">
+      <button className="btn" onClick={onCancel}>Cancel</button>
+      <button className="btn btn-primary" onClick={submit}>Save Theme</button>
+    </div>
+  </div>);
+}
+
 function calendarStatusPill(status){
   if(!status || status==="Scheduled") return null;
   const tone = status==="Cancelled" ? "danger" : status==="Completed" ? "grey" : "gold";
   return <Pill tone={tone}>{status}</Pill>;
 }
 
-function CalendarSection({data, setData, isAdmin}){
+function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThemes}){
+  const themes = arawatanThemes || {};
+  const [calType, setCalType] = useState("tourism");
   const [view, setView] = useState("monthly");
   const [printing, setPrinting] = useState(false);
   const [filters, setFilters] = useState({});
   const [modal, setModal] = useState(null);
   const [toDelete, setToDelete] = useState(null);
 
+  const switchType = (k) => { setCalType(k); setFilters({}); setView("monthly"); };
+  const typed = useMemo(()=>data.filter(d=>calendarTypeOf(d)===calType), [data, calType]);
+
   const options = useMemo(()=>({
-    year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort((a,b)=>String(b).localeCompare(String(a))),
+    year: [...new Set([...typed.map(d=>d.year), ...(calType==="arawatan" ? Object.keys(themes) : [])].filter(Boolean))].sort((a,b)=>String(b).localeCompare(String(a))),
     month: CALENDAR_MONTHS,
     municipality: CALENDAR_LOCATIONS,
     category: CALENDAR_CATEGORIES,
     status: CALENDAR_STATUSES,
-  }), [data]);
+  }), [typed, themes, calType]);
 
-  const filtered = useMemo(()=>data.filter(d=>{
+  const filtered = useMemo(()=>typed.filter(d=>{
     if(filters.title){
       const hay = ((d.title||"")+" "+(d.description||"")+" "+calendarLocation(d)).toLowerCase();
       if(!hay.includes(filters.title.toLowerCase())) return false;
@@ -3223,29 +3317,54 @@ function CalendarSection({data, setData, isAdmin}){
     if(filters.category && d.category!==filters.category) return false;
     if(filters.status && d.status!==filters.status) return false;
     return true;
-  }).sort(compareCalendarEvents), [data, filters]);
+  }).sort(compareCalendarEvents), [typed, filters]);
 
-  // Month-by-month groups. When only the year/month filters are used, months with no events are
-  // still listed ("No listed events"), like the printed provincial calendar.
+  // Month-by-month groups (Tourism Office and Provincial/Municipal). Months with no events are
+  // still listed ("No listed events") when only the year/month filters are used.
   const groups = useMemo(()=>{
+    if(calType==="arawatan") return [];
     const narrowed = !!(filters.title || filters.municipality || filters.category || filters.status);
-    const years = filters.year ? [filters.year]
-      : [...new Set((narrowed ? filtered : data).map(d=>d.year).filter(Boolean))].sort();
     const months = filters.month ? [filters.month] : CALENDAR_MONTHS;
     const out = [];
+    if(calType==="provincial"){            // annual: no year
+      months.forEach(m => {
+        const items = filtered.filter(d => d.month===m);
+        if(items.length===0 && narrowed) return;
+        out.push({ year:"", month:m, items });
+      });
+      return out;
+    }
+    const years = filters.year ? [filters.year]
+      : [...new Set((narrowed ? filtered : typed).map(d=>d.year).filter(Boolean))].sort();
     years.forEach(y => months.forEach(m => {
       const items = filtered.filter(d => d.year===y && d.month===m);
       if(items.length===0 && narrowed) return;
       out.push({ year:y, month:m, items });
     }));
     return out;
-  }, [filtered, data, filters]);
+  }, [filtered, typed, filters, calType]);
+
+  // Arawatan: one panel per year (theme + that year's activities).
+  const arawatanGroups = useMemo(()=>{
+    if(calType!=="arawatan") return [];
+    const narrowed = !!(filters.title || filters.month || filters.municipality || filters.status);
+    const years = filters.year ? [filters.year]
+      : [...new Set([...typed.map(d=>d.year), ...Object.keys(themes)].filter(Boolean))].sort().reverse();
+    return years.map(y=>({ year:y, items: filtered.filter(d=>d.year===y) })).filter(g=>!narrowed || g.items.length);
+  }, [filtered, typed, filters, calType, themes]);
 
   const save = (f) => {
     if(modal.mode==="edit"){
       setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
     } else {
       setData(prev=>[...prev, {...f, id:"CAL-"+Date.now()}]);
+    }
+    if(f.calendarType !== calType) setCalType(f.calendarType);   // follow the record to its calendar
+    setModal(null);
+  };
+  const saveTheme = (year, theme) => {
+    if(setArawatanThemes){
+      setArawatanThemes(prev=>{ const n = {...(prev||{})}; if(theme) n[year] = theme; else delete n[year]; return n; });
     }
     setModal(null);
   };
@@ -3259,7 +3378,7 @@ function CalendarSection({data, setData, isAdmin}){
     setData(prev => [...prev, ...fresh]);
   };
 
-  const municipalitiesCovered = new Set(data.map(d=>d.municipality).filter(m=>MUNICIPALITIES.includes(m))).size;
+  const municipalitiesCovered = new Set(typed.map(d=>d.municipality).filter(m=>MUNICIPALITIES.includes(m))).size;
   const rowActions = (d) => (
     <div className="actions-cell">
       {isAdmin && (<>
@@ -3269,6 +3388,48 @@ function CalendarSection({data, setData, isAdmin}){
     </div>
   );
 
+  const filterFields = calType==="tourism" ? [
+      {key:"title", label:"Search", type:"search", placeholder:"Activity, place or description"},
+      {key:"year", label:"Year"}, {key:"month", label:"Month"}, {key:"municipality", label:"Municipality"},
+      {key:"category", label:"Category"}, {key:"status", label:"Status"},
+    ] : calType==="provincial" ? [
+      {key:"title", label:"Search", type:"search", placeholder:"Activity, place or description"},
+      {key:"month", label:"Month"}, {key:"municipality", label:"Municipality"},
+      {key:"category", label:"Category"}, {key:"status", label:"Status"},
+    ] : [
+      {key:"title", label:"Search", type:"search", placeholder:"Activity, place or description"},
+      {key:"year", label:"Year"}, {key:"month", label:"Month"}, {key:"municipality", label:"Municipality"},
+      {key:"status", label:"Status"},
+    ];
+
+  const locCell = d => calendarLocation(d);
+  const colDefs = calType==="provincial" ? [
+      ["Month", d=>d.month], ["Date", d=>d.dateText], ["Activity / Event", d=>d.title], ["Municipality / Venue", locCell],
+      ["Category", d=>d.category], ["Status", d=>d.status], ["Description", d=>d.description],
+    ] : calType==="arawatan" ? [
+      ["Year", d=>d.year], ["Theme", d=>themes[d.year] || "—"], ["Month", d=>d.month], ["Date", d=>d.dateText],
+      ["Activity", d=>d.title], ["Venue", locCell], ["Status", d=>d.status], ["Description", d=>d.description],
+    ] : [
+      ["Year", d=>d.year], ["Month", d=>d.month], ["Date", d=>d.dateText], ["Activity / Event", d=>d.title],
+      ["Municipality / Venue", locCell], ["Category", d=>d.category], ["Status", d=>d.status], ["Description", d=>d.description],
+    ];
+
+  const itemRow = (d, dateLabel) => (
+    <div className="cal-item" key={d.id}>
+      <div className="cal-date">{dateLabel}</div>
+      <div className="cal-body">
+        <div className="cal-title">{d.title} {calendarStatusPill(d.status)} {d.category && <Pill tone="teal">{d.category}</Pill>}</div>
+        <div className="cal-meta"><Icon d={ICONS.pin} size={12} color="#5E6E6A" /> {calendarLocation(d)}</div>
+        {d.description && <div className="cal-desc">{d.description}</div>}
+      </div>
+      {rowActions(d)}
+    </div>
+  );
+
+  const emptyText = calType==="provincial"
+    ? (isAdmin ? "Add the annual celebrations one by one, upload an Excel file, or start with the Provincial Tourism Office Calendar of Events (" + CALENDAR_2025_SEED.length + " activities)." : "This calendar is empty. The administrator has not added any activities yet.")
+    : (isAdmin ? "Add activities one by one using Add Activity, or upload an Excel file." : "This calendar is empty. The administrator has not added any activities yet.");
+
   return (<div>
     <SingleSheetToolbar
       title="Calendar" sheetName="Calendar" headers={CALENDAR_HEADERS} buildRows={buildCalendarRows}
@@ -3276,15 +3437,27 @@ function CalendarSection({data, setData, isAdmin}){
       dedupeKey={calendarEventKey}
       idPrefix="CAL" isAdmin={isAdmin} filenamePrefix="Calendar-of-Activities"
     />
+
+    <div className="view-toggle" style={{flexWrap:"wrap", marginBottom:12}}>
+      {CALENDAR_TYPES.map(t=>(
+        <button key={t.key} className={calType===t.key?"active":""} onClick={()=>switchType(t.key)}>
+          {t.label} ({data.filter(d=>calendarTypeOf(d)===t.key).length})
+        </button>
+      ))}
+    </div>
+
     <div className="toolbar-row">
       <div className="view-toggle">
-        <button className={view==="monthly"?"active":""} onClick={()=>setView("monthly")}>By Month</button>
+        <button className={view==="monthly"?"active":""} onClick={()=>setView("monthly")}>{calType==="arawatan" ? "By Year" : "By Month"}</button>
         <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
       </div>
       <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
         <button className="btn btn-outline-teal btn-sm" onClick={()=>{ if(!filtered.length){ alert("No activities to print for this selection."); return; } setPrinting(true); }}>
           <PrintIcon /> Print Report
         </button>
+        {isAdmin && calType==="arawatan" && (
+          <button className="btn btn-outline-gold" onClick={()=>setModal({mode:"theme", year: filters.year || "", theme: filters.year ? (themes[filters.year]||"") : "", lock:false})}>Set Theme</button>
+        )}
         {isAdmin && (
           <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Activity</button>
         )}
@@ -3292,80 +3465,78 @@ function CalendarSection({data, setData, isAdmin}){
     </div>
 
     <div className="stat-cards">
-      <StatCard label="Total Activities" value={data.length} />
+      <StatCard label="Total Activities" value={typed.length} />
       <StatCard label="Showing" value={filtered.length} />
-      <StatCard label="Tentative" value={data.filter(d=>d.status==="Tentative").length} />
-      <StatCard label="Municipalities with Activities" value={municipalitiesCovered} />
+      <StatCard label="Tentative" value={typed.filter(d=>d.status==="Tentative").length} />
+      {calType==="arawatan"
+        ? <StatCard label="Years with Theme" value={Object.keys(themes).length} />
+        : <StatCard label="Municipalities with Activities" value={municipalitiesCovered} />}
     </div>
 
-    {data.length===0 && (
+    {typed.length===0 && (calType!=="arawatan" || Object.keys(themes).length===0) && (
       <div className="panel cal-empty">
         <div className="panel-title">No activities yet</div>
-        <p>{isAdmin
-          ? "Add activities one by one, upload an Excel file, or start with the Provincial Tourism Office 2025 Calendar of Events (" + CALENDAR_2025_SEED.length + " activities)."
-          : "The calendar is empty. The administrator has not added any activities yet."}</p>
-        {isAdmin && <button className="btn btn-outline-gold" onClick={loadSeed}>Load 2025 Calendar of Events</button>}
+        <p>{emptyText}</p>
+        {isAdmin && calType==="provincial" && <button className="btn btn-outline-gold" onClick={loadSeed}>Load 2025 Calendar of Events</button>}
       </div>
     )}
 
-    <FilterBar filters={filters} setFilters={setFilters} options={options} fields={[
-      {key:"title", label:"Search", type:"search", placeholder:"Activity, place or description"},
-      {key:"year", label:"Year"},
-      {key:"month", label:"Month"},
-      {key:"municipality", label:"Municipality"},
-      {key:"category", label:"Category"},
-      {key:"status", label:"Status"},
-    ]} />
+    <FilterBar filters={filters} setFilters={setFilters} options={options} fields={filterFields} />
 
     {view==="monthly" ? (
-      <div>
-        {groups.map(g=>(
-          <div className="panel cal-month" key={g.year+"-"+g.month}>
-            <div className="panel-title">{g.month} {g.year} <span className="cal-count">{g.items.length} {g.items.length===1 ? "activity" : "activities"}</span></div>
-            {g.items.length===0 && <div className="cal-none">(No listed events)</div>}
-            {g.items.map(d=>(
-              <div className="cal-item" key={d.id}>
-                <div className="cal-date">{d.dateText || "—"}</div>
-                <div className="cal-body">
-                  <div className="cal-title">{d.title} {calendarStatusPill(d.status)} {d.category && <Pill tone="teal">{d.category}</Pill>}</div>
-                  <div className="cal-meta"><Icon d={ICONS.pin} size={12} color="#5E6E6A" /> {calendarLocation(d)}</div>
-                  {d.description && <div className="cal-desc">{d.description}</div>}
-                </div>
-                {rowActions(d)}
+      calType==="arawatan" ? (
+        <div>
+          {arawatanGroups.map(g=>(
+            <div className="panel cal-month" key={g.year}>
+              <div className="panel-title">Arawatan {g.year} <span className="cal-count">{g.items.length} {g.items.length===1 ? "activity" : "activities"}</span></div>
+              <div style={{display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", margin:"2px 0 8px"}}>
+                <div style={{fontSize:13}}><b>Theme:</b> {themes[g.year] ? themes[g.year] : <span className="cell-sub">(no theme set)</span>}</div>
+                {isAdmin && <button className="btn btn-outline-teal btn-sm" onClick={()=>setModal({mode:"theme", year:g.year, theme:themes[g.year]||"", lock:true})}>{themes[g.year] ? "Edit Theme" : "Set Theme"}</button>}
               </div>
-            ))}
-          </div>
-        ))}
-        {groups.length===0 && data.length>0 && <div className="panel"><div className="empty-row">No activities match these filters.</div></div>}
-      </div>
+              {g.items.length===0 && <div className="cal-none">(No listed activities)</div>}
+              {g.items.map(d=>itemRow(d, (d.month ? d.month.slice(0,3) : "") + (d.dateText ? " " + d.dateText : "") || "—"))}
+            </div>
+          ))}
+          {arawatanGroups.length===0 && typed.length>0 && <div className="panel"><div className="empty-row">No activities match these filters.</div></div>}
+        </div>
+      ) : (
+        <div>
+          {groups.map(g=>(
+            <div className="panel cal-month" key={g.year+"-"+g.month}>
+              <div className="panel-title">{g.month} {g.year} <span className="cal-count">{g.items.length} {g.items.length===1 ? "activity" : "activities"}</span></div>
+              {g.items.length===0 && <div className="cal-none">(No listed events)</div>}
+              {g.items.map(d=>itemRow(d, d.dateText || "—"))}
+            </div>
+          ))}
+          {groups.length===0 && typed.length>0 && <div className="panel"><div className="empty-row">No activities match these filters.</div></div>}
+        </div>
+      )
     ) : (
       <div className="table-wrap">
         <table>
-          <thead><tr>{["Year","Month","Date","Activity / Event","Municipality / Venue","Category","Status","Description","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+          <thead><tr>{[...colDefs.map(c=>c[0]), "Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
           <tbody>
             {filtered.map((d,i)=>(
               <tr key={d.id} className={i%2?"odd":""}>
-                <td>{d.year}</td>
-                <td>{d.month}</td>
-                <td>{d.dateText}</td>
-                <td>{d.title}</td>
-                <td>{calendarLocation(d)}</td>
-                <td>{d.category}</td>
-                <td>{d.status}</td>
-                <td>{d.description}</td>
+                {colDefs.map(c=><td key={c[0]}>{c[1](d)}</td>)}
                 <td>{rowActions(d)}</td>
               </tr>
             ))}
-            {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No activities match these filters.</td></tr>}
+            {filtered.length===0 && <tr><td colSpan={colDefs.length+1} className="empty-row">No activities match these filters.</td></tr>}
           </tbody>
         </table>
       </div>
     )}
 
-    {printing && <RecordsPrintReport {...buildCalendarPrint(filtered, filters)} onDone={()=>setPrinting(false)} />}
-    {modal && isAdmin && (
-      <Modal title={modal.mode==="edit" ? "Edit Activity" : "Add Activity"} onClose={()=>setModal(null)}>
-        <CalendarForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
+    {printing && <RecordsPrintReport {...buildCalendarPrint(filtered, filters, calType, themes)} onDone={()=>setPrinting(false)} />}
+    {modal && isAdmin && (modal.mode==="edit" || modal.mode==="add") && (
+      <Modal title={(modal.mode==="edit" ? "Edit Activity" : "Add Activity") + " — " + CALENDAR_TYPE_LABEL[modal.item ? calendarTypeOf(modal.item) : calType]} onClose={()=>setModal(null)}>
+        <CalendarForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} calType={calType} defaultYear={filters.year || ""} />
+      </Modal>
+    )}
+    {modal && isAdmin && modal.mode==="theme" && (
+      <Modal title="Arawatan Theme" onClose={()=>setModal(null)}>
+        <ArawatanThemeForm initialYear={modal.year} initialTheme={modal.theme} lockYear={modal.lock} onCancel={()=>setModal(null)} onSave={saveTheme} />
       </Modal>
     )}
     {toDelete && (
@@ -4549,6 +4720,7 @@ function App(){
   const [officers, setOfficers] = useState([]);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [dirCategories, setDirCategories] = useState(DIRECTORY_CATEGORIES);
+  const [arawatanThemes, setArawatanThemes] = useState({});
   const [cloudStatus, setCloudStatus] = useState("loading");
   const [lastSaved, setLastSaved] = useState(null);
   const [cloudError, setCloudError] = useState("");
@@ -4576,6 +4748,7 @@ function App(){
         setOfficers(Array.isArray(data.officers) ? data.officers : []);
         setCalendarEvents(Array.isArray(data.calendar) ? data.calendar : []);
         if(Array.isArray(data.directoryCategories) && data.directoryCategories.length) setDirCategories(data.directoryCategories);
+        if(data.arawatanThemes && typeof data.arawatanThemes === "object") setArawatanThemes(data.arawatanThemes);
         if(data.updatedAt) setLastSaved(data.updatedAt);
       }
       setCloudStatus("idle");
@@ -4590,7 +4763,7 @@ function App(){
     if (!isAdmin) return;
     setCloudStatus("saving");
     try {
-      await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents, dirCategories);
+      await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents, dirCategories, arawatanThemes);
       setLastSaved(new Date().toISOString());
       setCloudStatus("idle");
     } catch(err){
@@ -4691,7 +4864,7 @@ function App(){
       <DirectorySection data={officers} setData={setOfficers} isAdmin={isAdmin} categories={dirCategories} setCategories={setDirCategories} />
     )}
     {tab === "calendar" && (
-      <CalendarSection data={calendarEvents} setData={setCalendarEvents} isAdmin={isAdmin} />
+      <CalendarSection data={calendarEvents} setData={setCalendarEvents} isAdmin={isAdmin} arawatanThemes={arawatanThemes} setArawatanThemes={setArawatanThemes} />
     )}
     {tab === "analytics" && (
       <AnalyticsSection establishments={establishments} attractions={attractions} cbtos={cbtos} />
