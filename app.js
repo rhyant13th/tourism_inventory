@@ -2658,6 +2658,17 @@ const emptyDirectoryRecord = {
   status: "Active",
 };
 
+// Columns of the printed Directory report: [heading, width %, value]
+const DIR_PRINT_COLS = [
+  ["Province/City", 12, d=>d.provinceCity || "—"],
+  ["Municipality", 13, d=>d.municipality || "—"],
+  ["Name", 17, d=>d.name || "—"],
+  ["Position/Designation", 18, d=>d.position || "—"],
+  ["Office/Agency", 16, d=>d.officeAgency || "—"],
+  ["Contact Number", 11, d=>d.contact || "—"],
+  ["Email Address", 13, d=>d.email || "—"],
+];
+
 const DIRECTORY_PLURALS = {"Elected Official":"Elected Officials","PTC Member":"PTC Members","Department Head":"Department Heads","Tourism Officer":"Tourism Officers","Others":"Others"};
 
 function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, categories, onAddCategory, onRenameCategory, categoryCount}){
@@ -2858,6 +2869,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
   const pageSize = 15;
   const [printing, setPrinting] = useState(false);
   const [notedBy, setNotedBy] = useState(null);
+  const [printCols, setPrintCols] = useState(null);
 
   const flashBanner = (type, text) => {
     setBanner({type, text});
@@ -3114,7 +3126,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
           categories={categories} onAddCategory={addCategory} onRenameCategory={renameCategory} categoryCount={categoryCount} />
       </Modal>
     )}
-    {printing && !notedBy && <NotedByDialog onConfirm={setNotedBy} onCancel={()=>setPrinting(false)} />}
+    {printing && !notedBy && <NotedByDialog columns={DIR_PRINT_COLS.map(c=>c[0])} onConfirm={(c, sel)=>{ setNotedBy(c); setPrintCols(sel); }} onCancel={()=>setPrinting(false)} />}
     {printing && notedBy && ReactDOM.createPortal(
       <div className="dir-print-root">
         <div className="print-report-header">
@@ -3130,27 +3142,19 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
           <h3 className="dir-title">{printTitle}</h3>
           <p className="dir-sub">Filters applied: <b>{printFilterText}</b> &nbsp;|&nbsp; Total records: <b>{filtered.length}</b></p>
         </div>
-        <table className="dir-print-table">
-          <colgroup>
-            <col style={{width:"12%"}} /><col style={{width:"13%"}} /><col style={{width:"17%"}} /><col style={{width:"18%"}} /><col style={{width:"16%"}} /><col style={{width:"11%"}} /><col style={{width:"13%"}} />
-          </colgroup>
-          <thead><tr>
-            {["Province/City","Municipality","Name","Position/Designation","Office/Agency","Contact Number","Email Address"].map(h=><th key={h}>{h}</th>)}
-          </tr></thead>
-          <tbody>
-            {printList.map(d=>(
-              <tr key={d.id}>
-                <td>{d.provinceCity || "—"}</td>
-                <td>{d.municipality || "—"}</td>
-                <td style={{fontWeight:600}}>{d.name || "—"}</td>
-                <td>{d.position || "—"}</td>
-                <td>{d.officeAgency || "—"}</td>
-                <td>{d.contact || "—"}</td>
-                <td>{d.email || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {(() => {
+          const dc = (printCols || DIR_PRINT_COLS.map((c,i)=>i)).map(i=>DIR_PRINT_COLS[i]);
+          const tw = dc.reduce((t,c)=>t+c[1], 0);
+          return (<table className="dir-print-table">
+            <colgroup>{dc.map(c=><col key={c[0]} style={{width:(c[1]/tw*100).toFixed(3)+"%"}} />)}</colgroup>
+            <thead><tr>{dc.map(c=><th key={c[0]}>{c[0]}</th>)}</tr></thead>
+            <tbody>
+              {printList.map(d=>(
+                <tr key={d.id}>{dc.map(c=><td key={c[0]} style={c[0]==="Name" ? {fontWeight:600} : undefined}>{c[2](d)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>);
+        })()}
         <div className="report-generated-note">
           <p>This report was generated through the Tourism Enterprise &amp; Attraction Inventory by the <strong>Provincial Tourism, Culture and Arts Division – Planning Development, Data Banking and Administrative Section</strong>. Figures reflect the records encoded in the system as of the date generated.</p>
           <p style={{marginTop:4}}>Date generated: {new Date().toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"})}</p>
@@ -4224,18 +4228,53 @@ function loadNotedBy(){
 }
 function saveNotedBy(v){ try{ localStorage.setItem(NOTED_BY_KEY, JSON.stringify(v)); }catch(e){} }
 
-function NotedByDialog({ onConfirm, onCancel }){
+// Print options box: choose which columns to print (when `columns` is given) and the Noted by name / position.
+// onConfirm(notedBy, selectedColumnIndexes | null)
+function NotedByDialog({ onConfirm, onCancel, columns }){
   const [v, setV] = useState(loadNotedBy);
+  const colKey = columns ? "tourism-print-cols:" + columns.join("|") : "";
+  const [sel, setSel] = useState(() => {
+    if(!columns) return [];
+    try{
+      const st = JSON.parse(localStorage.getItem(colKey) || "null");
+      if(Array.isArray(st)){
+        const ok = st.filter(i => Number.isInteger(i) && i >= 0 && i < columns.length);
+        if(ok.length) return ok;
+      }
+    }catch(e){}
+    return columns.map((c,i)=>i);
+  });
+  const toggle = (i) => setSel(p => p.includes(i) ? p.filter(x=>x!==i) : [...p, i].sort((a,b)=>a-b));
   const go = () => {
+    if(columns && sel.length === 0){ alert("Please tick at least one column to print."); return; }
     const c = { name: v.name.trim(), position: v.position.trim() };
     saveNotedBy(c);
-    onConfirm(c);
+    if(columns){ try{ localStorage.setItem(colKey, JSON.stringify(sel)); }catch(e){} }
+    onConfirm(c, columns ? sel : null);
   };
   const onKey = (e) => { if(e.key === "Enter"){ e.preventDefault(); go(); } };
   return (
-    <Modal title="Print Report — Noted by" onClose={onCancel}>
+    <Modal title="Print Report" onClose={onCancel}>
+      {columns && (
+        <div style={{marginBottom:14}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
+            <div style={{fontSize:12, fontWeight:700, color:"var(--subtext)"}}>Columns to print</div>
+            <div style={{display:"flex", gap:10}}>
+              <button type="button" className="clear-btn" onClick={()=>setSel(columns.map((c,i)=>i))}>Select all</button>
+              <button type="button" className="clear-btn" onClick={()=>setSel([])}>Clear</button>
+            </div>
+          </div>
+          <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(190px, 1fr))", gap:4}}>
+            {columns.map((c,i)=>(
+              <label key={i} style={{display:"flex", gap:8, alignItems:"center", fontSize:13, cursor:"pointer"}}>
+                <input type="checkbox" style={{width:"auto"}} checked={sel.includes(i)} onChange={()=>toggle(i)} />{c}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="form-grid">
-        <Field label="Noted by — Name"><input type="text" autoFocus value={v.name} onKeyDown={onKey} onChange={e=>setV({...v, name:e.target.value})} placeholder="Full name" /></Field>
+        <Field label="Noted by — Name"><input type="text" autoFocus={!columns} value={v.name} onKeyDown={onKey} onChange={e=>setV({...v, name:e.target.value})} placeholder="Full name" /></Field>
         <Field label="Noted by — Position"><input type="text" value={v.position} onKeyDown={onKey} onChange={e=>setV({...v, position:e.target.value})} placeholder="e.g. Provincial Tourism Officer" /></Field>
       </div>
       <div style={{fontSize:11, color:"var(--subtext)", marginTop:8}}>Leave the name blank to print an empty signature line.</div>
@@ -4270,6 +4309,7 @@ function PrintSignatories({ notedBy }){
 
 function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths, dense, onDone }){
   const [notedBy, setNotedBy] = useState(null);
+  const [pickedCols, setPickedCols] = useState(null);
   useEffect(()=>{
     if(!notedBy) return;
     const st = document.createElement("style");
@@ -4290,7 +4330,9 @@ function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths
     const t = setTimeout(()=>window.print(), 200);
     return ()=>{ clearTimeout(t); window.removeEventListener("afterprint", done); cleanup(); };
   }, [notedBy]);
-  if(!notedBy) return <NotedByDialog onConfirm={setNotedBy} onCancel={onDone} />;
+  if(!notedBy) return <NotedByDialog columns={headers} onConfirm={(c, sel)=>{ setNotedBy(c); setPickedCols(sel); }} onCancel={onDone} />;
+  const idx = pickedCols || headers.map((h,i)=>i);
+  const totalW = idx.reduce((t,i)=>t + (colWidths[i] || 1), 0);
   const generatedOn = new Date().toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"});
   return ReactDOM.createPortal(
     <div className={"dir-print-root" + (dense ? " rec-dense" : "")}>
@@ -4308,10 +4350,10 @@ function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths
         <p className="dir-sub">Filters applied: <b>{filterText}</b> &nbsp;|&nbsp; Total records: <b>{total}</b></p>
       </div>
       <table className="dir-print-table">
-        <colgroup>{colWidths.map((w,i)=><col key={i} style={{width:w+"%"}} />)}</colgroup>
-        <thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead>
+        <colgroup>{idx.map(i=><col key={i} style={{width:((colWidths[i] || 1)/totalW*100).toFixed(3)+"%"}} />)}</colgroup>
+        <thead><tr>{idx.map(i=><th key={i}>{headers[i]}</th>)}</tr></thead>
         <tbody>
-          {rows.map((r,i)=>(<tr key={i}>{r.map((c,j)=><td key={j}>{c}</td>)}</tr>))}
+          {rows.map((r,k)=>(<tr key={k}>{idx.map(i=><td key={i}>{r[i]}</td>)}</tr>))}
         </tbody>
       </table>
     <div className="report-generated-note">
@@ -4496,6 +4538,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const [now, setNow] = useState(new Date());
   const [notedBy, setNotedBy] = useState(loadNotedBy);
   const [askNoted, setAskNoted] = useState(false);
+  const [printCols, setPrintCols] = useState(null);   // column numbers kept while printing (null = all)
 
   useEffect(()=>{
     const h = ()=>setNow(new Date());
@@ -4610,10 +4653,13 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const numCls = j => (j>=numStart ? " ar-r" : "") + (j===numStart ? " ar-key" : "");
 
   const handlePrint = () => setAskNoted(true);
-  const confirmNoted = (c) => {
+  const confirmNoted = (c, sel) => {
     setNotedBy(c); setAskNoted(false); setNow(new Date());
+    setPrintCols(sel ? sel.map(i=>i+1) : null);      // the first (label) column is always printed
+    window.addEventListener("afterprint", ()=>setPrintCols(null), {once:true});
     setTimeout(()=>window.print(), 150);
   };
+  const vis = cols.map((c,j)=>j).filter(j => j===0 || !printCols || printCols.includes(j));
 
   return (<div className="analytics-report">
     <div className="print-report-header">
@@ -4660,15 +4706,15 @@ function AnalyticsSection({establishments, attractions, cbtos}){
       <div className="ar-scroll">
         <table className="ar-table">
           <thead>
-            <tr>{cols.map((c,j)=><th key={j} className={numCls(j).trim()}>{c}</th>)}</tr>
+            <tr>{vis.map(j=><th key={j} className={numCls(j).trim()}>{cols[j]}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map((r,i)=>(
-              <tr key={i}>{r.map((c,j)=><td key={j} className={(j===0 ? "ar-first" : numCls(j)).trim()}>{fmt(c)}</td>)}</tr>
+              <tr key={i}>{vis.map(j=><td key={j} className={(j===0 ? "ar-first" : numCls(j)).trim()}>{fmt(r[j])}</td>)}</tr>
             ))}
           </tbody>
           <tfoot>
-            <tr>{totals.map((c,j)=><td key={j} className={(j===0 ? "ar-first" : numCls(j)).trim()}>{fmt(c)}</td>)}</tr>
+            <tr>{vis.map(j=><td key={j} className={(j===0 ? "ar-first" : numCls(j)).trim()}>{fmt(totals[j])}</td>)}</tr>
           </tfoot>
         </table>
       </div>
@@ -4693,7 +4739,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
       <p style={{marginTop:4}}>Date generated: {generated}</p>
     </div>
     <PrintSignatories notedBy={notedBy} />
-    {askNoted && <NotedByDialog onConfirm={confirmNoted} onCancel={()=>setAskNoted(false)} />}
+    {askNoted && <NotedByDialog columns={cols.slice(1)} onConfirm={confirmNoted} onCancel={()=>setAskNoted(false)} />}
   </div>);
 }
 
