@@ -2811,6 +2811,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
   const [banner, setBanner] = useState(null);
   const pageSize = 15;
   const [printing, setPrinting] = useState(false);
+  const [notedBy, setNotedBy] = useState(null);
 
   const flashBanner = (type, text) => {
     setBanner({type, text});
@@ -2879,7 +2880,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
 
   // ---- Print Report (Directory records) ----
   useEffect(()=>{
-    if(!printing) return;
+    if(!printing || !notedBy) return;
     const st = document.createElement("style");
     st.id = "dir-page-style";
     st.textContent = "@page { margin: 12mm; }";
@@ -2890,11 +2891,11 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
       const el = document.getElementById("dir-page-style");
       if(el) el.remove();
     };
-    const done = () => { cleanup(); setPrinting(false); };
+    const done = () => { cleanup(); setPrinting(false); setNotedBy(null); };
     window.addEventListener("afterprint", done, {once:true});
     const t = setTimeout(()=>window.print(), 200);
     return ()=>{ clearTimeout(t); window.removeEventListener("afterprint", done); cleanup(); };
-  }, [printing]);
+  }, [printing, notedBy]);
 
   const printList = useMemo(()=>[...filtered].sort(lguCompareRecords), [filtered, lguCompareRecords]);
   const printTitle = (() => {
@@ -3065,7 +3066,8 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
           categories={categories} onAddCategory={addCategory} onRenameCategory={renameCategory} categoryCount={categoryCount} />
       </Modal>
     )}
-    {printing && ReactDOM.createPortal(
+    {printing && !notedBy && <NotedByDialog onConfirm={setNotedBy} onCancel={()=>setPrinting(false)} />}
+    {printing && notedBy && ReactDOM.createPortal(
       <div className="dir-print-root">
         <div className="print-report-header">
           <img src={PGO_LOGO_URI} alt="Official Seal of the Province of Occidental Mindoro" />
@@ -3103,8 +3105,9 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
         </table>
         <div className="report-generated-note">
           <p>This report was generated through the Tourism Enterprise &amp; Attraction Inventory by the <strong>Provincial Tourism, Culture and Arts Division – Planning Development, Data Banking and Administrative Section</strong>. Figures reflect the records encoded in the system as of the date generated.</p>
-          <p style={{marginTop:4}}>Prepared by: <strong>RYAN R. TAJONERA</strong>, Tourism Operations Officer II &nbsp;|&nbsp; Date generated: {new Date().toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"})}</p>
+          <p style={{marginTop:4}}>Date generated: {new Date().toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"})}</p>
         </div>
+        <PrintSignatories notedBy={notedBy} />
       </div>,
       document.body
     )}
@@ -4042,8 +4045,65 @@ function AccreditationSection({data, setData, isAdmin}){
  * PRINT REPORT LAYOUT: the printable table shown when you press Print.
  */
 
+// "Noted by" name and position are typed in a small box before printing (remembered on this computer).
+const NOTED_BY_KEY = "tourism-inventory-noted-by";
+function loadNotedBy(){
+  try{
+    const v = JSON.parse(localStorage.getItem(NOTED_BY_KEY) || "null");
+    if(v && typeof v === "object") return { name: String(v.name||""), position: String(v.position||"") };
+  }catch(e){}
+  return { name: "", position: "" };
+}
+function saveNotedBy(v){ try{ localStorage.setItem(NOTED_BY_KEY, JSON.stringify(v)); }catch(e){} }
+
+function NotedByDialog({ onConfirm, onCancel }){
+  const [v, setV] = useState(loadNotedBy);
+  const go = () => {
+    const c = { name: v.name.trim(), position: v.position.trim() };
+    saveNotedBy(c);
+    onConfirm(c);
+  };
+  const onKey = (e) => { if(e.key === "Enter"){ e.preventDefault(); go(); } };
+  return (
+    <Modal title="Print Report — Noted by" onClose={onCancel}>
+      <div className="form-grid">
+        <Field label="Noted by — Name"><input type="text" autoFocus value={v.name} onKeyDown={onKey} onChange={e=>setV({...v, name:e.target.value})} placeholder="Full name" /></Field>
+        <Field label="Noted by — Position"><input type="text" value={v.position} onKeyDown={onKey} onChange={e=>setV({...v, position:e.target.value})} placeholder="e.g. Provincial Tourism Officer" /></Field>
+      </div>
+      <div style={{fontSize:11, color:"var(--subtext)", marginTop:8}}>Leave the name blank to print an empty signature line.</div>
+      <div className="form-actions">
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary" onClick={go}>Print</button>
+      </div>
+    </Modal>
+  );
+}
+
+// Prepared by / Noted by block printed at the end of every report.
+function PrintSignatories({ notedBy }){
+  const nb = notedBy || { name: "", position: "" };
+  return (
+    <div className="print-signatories">
+      <div className="sig-block">
+        <div className="sig-label">Prepared by:</div>
+        <div className="sig-gap" />
+        <div>RYAN R. TAJONERA</div>
+        <div>Tourism Operations Officer II</div>
+      </div>
+      <div className="sig-block">
+        <div className="sig-label">Noted by:</div>
+        <div className="sig-gap" />
+        {nb.name ? <div>{nb.name}</div> : <div className="sig-line" />}
+        {nb.position ? <div>{nb.position}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths, dense, onDone }){
+  const [notedBy, setNotedBy] = useState(null);
   useEffect(()=>{
+    if(!notedBy) return;
     const st = document.createElement("style");
     st.id = "rec-page-style";
     st.textContent = "@page { margin: 12mm; } " +
@@ -4061,7 +4121,8 @@ function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths
     window.addEventListener("afterprint", done, {once:true});
     const t = setTimeout(()=>window.print(), 200);
     return ()=>{ clearTimeout(t); window.removeEventListener("afterprint", done); cleanup(); };
-  }, []);
+  }, [notedBy]);
+  if(!notedBy) return <NotedByDialog onConfirm={setNotedBy} onCancel={onDone} />;
   const generatedOn = new Date().toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"});
   return ReactDOM.createPortal(
     <div className={"dir-print-root" + (dense ? " rec-dense" : "")}>
@@ -4087,8 +4148,9 @@ function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths
       </table>
     <div className="report-generated-note">
       <p>This report was generated through the Tourism Enterprise &amp; Attraction Inventory by the <strong>Provincial Tourism, Culture and Arts Division – Planning Development, Data Banking and Administrative Section</strong>. Figures reflect the records encoded in the system as of the date generated.</p>
-      <p style={{marginTop:4}}>Prepared by: <strong>RYAN R. TAJONERA</strong>, Tourism Operations Officer II &nbsp;|&nbsp; Date generated: {generatedOn}</p>
+      <p style={{marginTop:4}}>Date generated: {generatedOn}</p>
     </div>
+    <PrintSignatories notedBy={notedBy} />
     </div>,
     document.body
   );
@@ -4264,6 +4326,8 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const [report, setReport] = useState("estab-muni");
   const [filters, setFilters] = useState({});
   const [now, setNow] = useState(new Date());
+  const [notedBy, setNotedBy] = useState(loadNotedBy);
+  const [askNoted, setAskNoted] = useState(false);
 
   useEffect(()=>{
     const h = ()=>setNow(new Date());
@@ -4377,7 +4441,11 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const fmt = c => typeof c==="number" ? c.toLocaleString() : c;
   const numCls = j => (j>=numStart ? " ar-r" : "") + (j===numStart ? " ar-key" : "");
 
-  const handlePrint = () => { setNow(new Date()); setTimeout(()=>window.print(), 80); };
+  const handlePrint = () => setAskNoted(true);
+  const confirmNoted = (c) => {
+    setNotedBy(c); setAskNoted(false); setNow(new Date());
+    setTimeout(()=>window.print(), 150);
+  };
 
   return (<div className="analytics-report">
     <div className="print-report-header">
@@ -4455,8 +4523,10 @@ function AnalyticsSection({establishments, attractions, cbtos}){
 
     <div className="report-generated-note">
       <p>This report was generated through the Tourism Enterprise &amp; Attraction Inventory by the <strong>Provincial Tourism, Culture and Arts Division – Planning Development, Data Banking and Administrative Section</strong>. Figures reflect the records encoded in the system as of the date generated.</p>
-      <p style={{marginTop:4}}>Prepared by: <strong>RYAN R. TAJONERA</strong>, Tourism Operations Officer II &nbsp;|&nbsp; Date generated: {generated}</p>
+      <p style={{marginTop:4}}>Date generated: {generated}</p>
     </div>
+    <PrintSignatories notedBy={notedBy} />
+    {askNoted && <NotedByDialog onConfirm={confirmNoted} onCancel={()=>setAskNoted(false)} />}
   </div>);
 }
 

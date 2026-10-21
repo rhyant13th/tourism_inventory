@@ -566,6 +566,11 @@
   .report-generated-note { border-top: 1px solid #cbd5e1; padding-top: 12px; margin-top: 4px; font-size: 10px; line-height: 1.6; color: #64748b; font-family: 'Inter', 'Segoe UI', sans-serif; }
   .report-generated-note p { margin: 0; }
   .report-generated-note strong { color: #334155; }
+  /* Prepared by / Noted by block (printed at the end of each report) */
+  .print-signatories { margin-top: 18px; font-size: 12px; line-height: 1.45; color: #000; font-family: Calibri, 'Segoe UI', Arial, sans-serif; text-align: left; break-inside: avoid; page-break-inside: avoid; }
+  .print-signatories .sig-block + .sig-block { margin-top: 20px; }
+  .print-signatories .sig-gap { height: 30px; }
+  .print-signatories .sig-line { width: 170px; border-bottom: 1px solid #000; height: 0; }
   /* print-only heading with logo (hidden on screen) */
   .print-report-header { display: none; }
   @media print {
