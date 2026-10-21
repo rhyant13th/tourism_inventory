@@ -293,6 +293,11 @@ const CALENDAR_HEADERS = [
 
 function pad(n){ return String(n).padStart(2,"0"); }
 
+// Filter dropdowns are multiple select: a filter value is a list of chosen items (empty = All).
+// A plain text value (older code, search boxes) is treated as a one-item list.
+function filterSel(v){ return Array.isArray(v) ? v : (v ? [v] : []); }
+function matchSel(v, val){ const a = filterSel(v); return a.length===0 || a.includes(val); }
+
 function timestamp(){
   const d = new Date();
   return d.getFullYear()+""+pad(d.getMonth()+1)+pad(d.getDate())+"-"+pad(d.getHours())+pad(d.getMinutes());
@@ -576,6 +581,7 @@ function isoYM(iso){
 function isoInPeriod(iso, year, month){
   const p = isoYM(iso);
   if(!p || p.y !== String(year)) return false;
+  if(Array.isArray(month)) return month.length===0 || month.map(Number).includes(p.m);   // several months chosen
   return !month || p.m === Number(month);
 }
 
@@ -621,8 +627,9 @@ function validateAccredEntries(list, baselineList){
 // - accredited (Date Accredited) or expiring (Valid Until) inside the year / month, or
 // - (year only) the period is still running during that year.
 function accredPeriodInScope(h, year, month){
-  return month ? accredEntryCoversMonth(h, year, month)
-               : accredEntryCoverageYears(h).includes(String(year));
+  const ms = Array.isArray(month) ? month : (month ? [month] : []);
+  return ms.length ? ms.some(m => accredEntryCoversMonth(h, year, m))
+                   : accredEntryCoverageYears(h).includes(String(year));
 }
 
 // Dashboard numbers for one year (each enterprise is counted once per card).
@@ -1505,10 +1512,7 @@ function FilterBar({filters, setFilters, options, fields}){
             <input type="text" value={filters[fld.key]||""} onChange={(e)=>update(fld.key, e.target.value)} placeholder={fld.placeholder} />
           </div>
         ) : (
-          <select value={filters[fld.key]||""} onChange={(e)=>update(fld.key, e.target.value)}>
-            <option value="">All</option>
-            {(options[fld.key]||[]).map(o=><option key={o} value={o}>{o}</option>)}
-          </select>
+          <MultiSelectFilter options={options[fld.key]||[]} value={filterSel(filters[fld.key])} onChange={(v)=>update(fld.key, v)} allLabel="All" />
         )}
       </div>
     ))}
@@ -1536,7 +1540,7 @@ function PrintIcon(){
 function printCell(v){ return (v===undefined || v===null || v==="") ? "—" : String(v); }
 
 function printFilterSummary(fields, filters){
-  const parts = fields.filter(fl => filters && filters[fl.key]).map(fl => fl.label + ": " + filters[fl.key]);
+  const parts = fields.filter(fl => filters && filterSel(filters[fl.key]).length).map(fl => fl.label + ": " + filterSel(filters[fl.key]).join(", "));
   return parts.length ? parts.join("; ") : "None (all records)";
 }
 
@@ -1608,7 +1612,8 @@ function buildCbtosPrint(list, filters){
 function buildCalendarPrint(list, filters, calType, themes){
   const type = calType || "tourism";
   const th = themes || {};
-  const year = filters && filters.year ? " " + filters.year : "";
+  const years = filterSel(filters && filters.year);
+  const year = years.length ? " " + years.join(", ") : "";
   const common = d => [printCell(d.month), printCell(d.dateText), printCell(d.title), printCell(calendarLocation(d))];
   const base = {
     title: CALENDAR_TYPE_LABEL[type] + (type==="provincial" ? "" : year),
@@ -1624,7 +1629,7 @@ function buildCalendarPrint(list, filters, calType, themes){
     };
   }
   if(type==="arawatan"){
-    const theme = filters && filters.year ? th[filters.year] : "";
+    const theme = years.length===1 ? th[years[0]] : "";
     return { ...base,
       filterText: (theme ? "Theme: " + theme + "; " : "") + base.filterText,
       headers: ["No.","Year","Theme","Month","Date","Activity","Venue","Status","Description"],
@@ -2024,12 +2029,12 @@ function EstablishmentsSection({data, setData, isAdmin}){
 
   const filtered = useMemo(()=>data.filter(d=>{
     if(filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
-    if(filters.municipality && d.municipality!==filters.municipality) return false;
-    if(filters.classification && d.classification!==filters.classification) return false;
-    if(filters.type && d.type!==filters.type) return false;
-    if(filters.status && d.status!==filters.status) return false;
-    if(filters.tourlista && (d.tourlista||"No")!==filters.tourlista) return false;
-    if(filters.year && d.year!==filters.year) return false;
+    if(!matchSel(filters.municipality, d.municipality)) return false;
+    if(!matchSel(filters.classification, d.classification)) return false;
+    if(!matchSel(filters.type, d.type)) return false;
+    if(!matchSel(filters.status, d.status)) return false;
+    if(!matchSel(filters.tourlista, d.tourlista||"No")) return false;
+    if(!matchSel(filters.year, d.year)) return false;
     return true;
   }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
 
@@ -2308,11 +2313,11 @@ function AttractionsSection({data, setData, isAdmin}){
 
   const filtered = useMemo(()=>data.filter(d=>{
     if(filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
-    if(filters.municipality && d.municipality!==filters.municipality) return false;
-    if(filters.category && d.category!==filters.category) return false;
-    if(filters.selection && d.selection!==filters.selection) return false;
-    if(filters.physicalCondition && d.physicalCondition!==filters.physicalCondition) return false;
-    if(filters.declarationStatus && d.declarationStatus!==filters.declarationStatus) return false;
+    if(!matchSel(filters.municipality, d.municipality)) return false;
+    if(!matchSel(filters.category, d.category)) return false;
+    if(!matchSel(filters.selection, d.selection)) return false;
+    if(!matchSel(filters.physicalCondition, d.physicalCondition)) return false;
+    if(!matchSel(filters.declarationStatus, d.declarationStatus)) return false;
     return true;
   }), [data, filters]);
 
@@ -2525,7 +2530,7 @@ function CbtoSection({data, setData, isAdmin}){
 
   const filtered = useMemo(()=>data.filter(d=>{
     if(filters.nameAddress && !(d.nameAddress||"").toLowerCase().includes(filters.nameAddress.toLowerCase())) return false;
-    if(filters.municipality && d.municipality!==filters.municipality) return false;
+    if(!matchSel(filters.municipality, d.municipality)) return false;
     return true;
   }).sort((a,b)=>(a.municipality+a.nameAddress).localeCompare(b.municipality+b.nameAddress)), [data, filters]);
 
@@ -2838,7 +2843,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
     if(newName.toLowerCase()!==oldName.toLowerCase() && categories.some(c=>c.toLowerCase()===newName.toLowerCase())) return "That category already exists.";
     if(setCategories) setCategories(categories.map(c=>c===oldName ? newName : c));
     setData(prev=>prev.map(d=> normalizeDirectoryRecord(d).category===oldName ? {...d, category:newName} : d));
-    setFilters(prev=> prev.category===oldName ? {...prev, category:newName} : prev);
+    setFilters(prev=> filterSel(prev.category).includes(oldName) ? {...prev, category: filterSel(prev.category).map(c=>c===oldName ? newName : c)} : prev);
     return "";
   };
   const categoryCount = (name) => data.filter(d=>d.category===name).length;
@@ -2888,12 +2893,12 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
   const filtered = useMemo(()=>{
     const q = search.trim().toLowerCase();
     return data.filter(d=>{
-      if(filters.provinceCity && d.provinceCity!==filters.provinceCity) return false;
-      if(filters.municipality && d.municipality!==filters.municipality) return false;
-      if(filters.category && d.category!==filters.category) return false;
-      if(filters.officeAgency && d.officeAgency!==filters.officeAgency) return false;
-      if(filters.year && d.year!==filters.year) return false;
-      if(filters.status && d.status!==filters.status) return false;
+      if(!matchSel(filters.provinceCity, d.provinceCity)) return false;
+      if(!matchSel(filters.municipality, d.municipality)) return false;
+      if(!matchSel(filters.category, d.category)) return false;
+      if(!matchSel(filters.officeAgency, d.officeAgency)) return false;
+      if(!matchSel(filters.year, d.year)) return false;
+      if(!matchSel(filters.status, d.status)) return false;
       if(q){
         const hay = [d.name,d.position,d.officeAgency,d.contact,d.email].join(" ").toLowerCase();
         if(!hay.includes(q)) return false;
@@ -2940,12 +2945,13 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
 
   const printList = useMemo(()=>[...filtered].sort(lguCompareRecords), [filtered, lguCompareRecords]);
   const printTitle = (() => {
-    return filters.category ? (DIRECTORY_PLURALS[filters.category] || filters.category) + " Directory" : "Directory";
+    const cs = filterSel(filters.category);
+    return cs.length===1 ? (DIRECTORY_PLURALS[cs[0]] || cs[0]) + " Directory" : "Directory";
   })();
 
   const printFilterText = (() => {
     const labels = {provinceCity:"Province/City", municipality:"Municipality", category:"Category", officeAgency:"Office/Agency", year:"Year", status:"Status"};
-    const parts = Object.keys(labels).filter(k=>filters[k]).map(k=>labels[k]+": "+filters[k]);
+    const parts = Object.keys(labels).filter(k=>filterSel(filters[k]).length).map(k=>labels[k]+": "+filterSel(filters[k]).join(", "));
     if(search.trim()) parts.push('Search: "'+search.trim()+'"');
     return parts.join("  |  ") || "None (all records)";
   })();
@@ -2976,8 +2982,9 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
     XLSX.writeFile(wb, "Directory-" + label + "-" + timestamp() + ".xlsx");
   };
   const handleExportYear = () => {
-    if(!filters.year){ flashBanner("error", "Select a Year filter first to export that year's records."); return; }
-    exportSubset(data.filter(d=>d.year===filters.year), "Year-"+filters.year);
+    const ys = filterSel(filters.year);
+    if(!ys.length){ flashBanner("error", "Select a Year filter first to export that year's records."); return; }
+    exportSubset(data.filter(d=>ys.includes(d.year)), "Year-"+ys.join("-"));
   };
 
   return (<div>
@@ -3295,6 +3302,7 @@ function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThe
   const [modal, setModal] = useState(null);
   const [toDelete, setToDelete] = useState(null);
 
+  const oneYear = filterSel(filters.year).length===1 ? filterSel(filters.year)[0] : "";
   const switchType = (k) => { setCalType(k); setFilters({}); setView("monthly"); };
   const typed = useMemo(()=>data.filter(d=>calendarTypeOf(d)===calType), [data, calType]);
 
@@ -3311,11 +3319,11 @@ function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThe
       const hay = ((d.title||"")+" "+(d.description||"")+" "+calendarLocation(d)).toLowerCase();
       if(!hay.includes(filters.title.toLowerCase())) return false;
     }
-    if(filters.year && d.year!==filters.year) return false;
-    if(filters.month && d.month!==filters.month) return false;
-    if(filters.municipality && d.municipality!==filters.municipality) return false;
-    if(filters.category && d.category!==filters.category) return false;
-    if(filters.status && d.status!==filters.status) return false;
+    if(!matchSel(filters.year, d.year)) return false;
+    if(!matchSel(filters.month, d.month)) return false;
+    if(!matchSel(filters.municipality, d.municipality)) return false;
+    if(!matchSel(filters.category, d.category)) return false;
+    if(!matchSel(filters.status, d.status)) return false;
     return true;
   }).sort(compareCalendarEvents), [typed, filters]);
 
@@ -3323,8 +3331,8 @@ function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThe
   // still listed ("No listed events") when only the year/month filters are used.
   const groups = useMemo(()=>{
     if(calType==="arawatan") return [];
-    const narrowed = !!(filters.title || filters.municipality || filters.category || filters.status);
-    const months = filters.month ? [filters.month] : CALENDAR_MONTHS;
+    const narrowed = !!(filters.title || filterSel(filters.municipality).length || filterSel(filters.category).length || filterSel(filters.status).length);
+    const months = filterSel(filters.month).length ? CALENDAR_MONTHS.filter(m=>filterSel(filters.month).includes(m)) : CALENDAR_MONTHS;
     const out = [];
     if(calType==="provincial"){            // annual: no year
       months.forEach(m => {
@@ -3334,7 +3342,7 @@ function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThe
       });
       return out;
     }
-    const years = filters.year ? [filters.year]
+    const years = filterSel(filters.year).length ? [...filterSel(filters.year)].sort()
       : [...new Set((narrowed ? filtered : typed).map(d=>d.year).filter(Boolean))].sort();
     years.forEach(y => months.forEach(m => {
       const items = filtered.filter(d => d.year===y && d.month===m);
@@ -3347,8 +3355,8 @@ function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThe
   // Arawatan: one panel per year (theme + that year's activities).
   const arawatanGroups = useMemo(()=>{
     if(calType!=="arawatan") return [];
-    const narrowed = !!(filters.title || filters.month || filters.municipality || filters.status);
-    const years = filters.year ? [filters.year]
+    const narrowed = !!(filters.title || filterSel(filters.month).length || filterSel(filters.municipality).length || filterSel(filters.status).length);
+    const years = filterSel(filters.year).length ? [...filterSel(filters.year)].sort().reverse()
       : [...new Set([...typed.map(d=>d.year), ...Object.keys(themes)].filter(Boolean))].sort().reverse();
     return years.map(y=>({ year:y, items: filtered.filter(d=>d.year===y) })).filter(g=>!narrowed || g.items.length);
   }, [filtered, typed, filters, calType, themes]);
@@ -3456,7 +3464,7 @@ function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThe
           <PrintIcon /> Print Report
         </button>
         {isAdmin && calType==="arawatan" && (
-          <button className="btn btn-outline-gold" onClick={()=>setModal({mode:"theme", year: filters.year || "", theme: filters.year ? (themes[filters.year]||"") : "", lock:false})}>Set Theme</button>
+          <button className="btn btn-outline-gold" onClick={()=>setModal({mode:"theme", year: oneYear, theme: oneYear ? (themes[oneYear]||"") : "", lock:false})}>Set Theme</button>
         )}
         {isAdmin && (
           <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Activity</button>
@@ -3531,7 +3539,7 @@ function CalendarSection({data, setData, isAdmin, arawatanThemes, setArawatanThe
     {printing && <RecordsPrintReport {...buildCalendarPrint(filtered, filters, calType, themes)} onDone={()=>setPrinting(false)} />}
     {modal && isAdmin && (modal.mode==="edit" || modal.mode==="add") && (
       <Modal title={(modal.mode==="edit" ? "Edit Activity" : "Add Activity") + " — " + CALENDAR_TYPE_LABEL[modal.item ? calendarTypeOf(modal.item) : calType]} onClose={()=>setModal(null)}>
-        <CalendarForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} calType={calType} defaultYear={filters.year || ""} />
+        <CalendarForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} calType={calType} defaultYear={oneYear} />
       </Modal>
     )}
     {modal && isAdmin && modal.mode==="theme" && (
@@ -3861,17 +3869,18 @@ function AccreditationSection({data, setData, isAdmin}){
   }, [scoped]);
 
   // ---------- Records list ----------
-  const monthNum = filters.month ? CALENDAR_MONTHS.indexOf(filters.month) + 1 : "";
+  const monthSel = filterSel(filters.month);
+  const monthNum = monthSel.map(m => CALENDAR_MONTHS.indexOf(m) + 1);
   const records = useMemo(()=>{
     const ents = data.filter(d=>{
       if(filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
-      if(filters.municipality && d.municipality!==filters.municipality) return false;
-      if(filters.classification && d.classification!==filters.classification) return false;
-      if(filters.type && d.type!==filters.type) return false;
+      if(!matchSel(filters.municipality, d.municipality)) return false;
+      if(!matchSel(filters.classification, d.classification)) return false;
+      if(!matchSel(filters.type, d.type)) return false;
       return true;
     });
     return accredRecordRows(ents, statYear, monthNum, filters.status, filters.dot);
-  }, [data, filters, statYear, monthNum]);
+  }, [data, filters, statYear, monthSel.join("|")]);
   const dotOptions = useMemo(()=>{
     const ds = new Set();
     data.forEach(d=>getAccredHistory(d).forEach(h=>{ if(h.dotAsOf) ds.add(h.dotAsOf); }));
@@ -3890,8 +3899,8 @@ function AccreditationSection({data, setData, isAdmin}){
   const onlyNotAccred = statusSel.length===1 && statusSel[0]==="Not Accredited";
 
   const printFilters = {
-    year: statYear, month: filters.month, name: filters.name, municipality: filters.municipality,
-    classification: filters.classification, type: filters.type, status: statusSel.join(", "),
+    year: statYear, month: monthSel.join(", "), name: filters.name, municipality: filterSel(filters.municipality).join(", "),
+    classification: filterSel(filters.classification).join(", "), type: filterSel(filters.type).join(", "), status: statusSel.join(", "),
     dot: dotSel.map(formatDateDisplay).join(", "),
   };
 
@@ -3994,7 +4003,7 @@ function AccreditationSection({data, setData, isAdmin}){
                         <td>
                           {(m.accredited+m.toExpire+m.expired)>0 && (
                             <button className="btn btn-outline-teal btn-sm" onClick={()=>{
-                              setFilters({month: m.month, ...(statMunicipality ? {municipality: statMunicipality} : {})});
+                              setFilters({month: [m.month], ...(statMunicipality ? {municipality: [statMunicipality]} : {})});
                               setView("records");
                             }}>View records</button>
                           )}
@@ -4053,7 +4062,7 @@ function AccreditationSection({data, setData, isAdmin}){
                       <tr key={r.date} className={i%2?"odd":""}>
                         <td>{formatDateDisplay(r.date)}</td>
                         <td>{r.count}</td>
-                        <td><button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFilters({dot: [r.date], ...(statMunicipality ? {municipality: statMunicipality} : {})}); setView("records"); }}>View records</button></td>
+                        <td><button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFilters({dot: [r.date], ...(statMunicipality ? {municipality: [statMunicipality]} : {})}); setView("records"); }}>View records</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -4085,10 +4094,7 @@ function AccreditationSection({data, setData, isAdmin}){
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Month</div>
-            <select value={filters.month||""} onChange={(e)=>updateFilter("month", e.target.value)}>
-              <option value="">All months</option>
-              {CALENDAR_MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
+            <MultiSelectFilter options={CALENDAR_MONTHS} value={monthSel} onChange={(v)=>updateFilter("month", v)} allLabel="All months" />
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Enterprise</div>
@@ -4099,24 +4105,15 @@ function AccreditationSection({data, setData, isAdmin}){
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Municipality</div>
-            <select value={filters.municipality||""} onChange={(e)=>updateFilter("municipality", e.target.value)}>
-              <option value="">All</option>
-              {MUNICIPALITIES.map(o=><option key={o} value={o}>{o}</option>)}
-            </select>
+            <MultiSelectFilter options={MUNICIPALITIES} value={filterSel(filters.municipality)} onChange={(v)=>updateFilter("municipality", v)} allLabel="All" />
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Classification</div>
-            <select value={filters.classification||""} onChange={(e)=>updateFilter("classification", e.target.value)}>
-              <option value="">All</option>
-              {CLASSIFICATIONS.map(o=><option key={o} value={o}>{o}</option>)}
-            </select>
+            <MultiSelectFilter options={CLASSIFICATIONS} value={filterSel(filters.classification)} onChange={(v)=>updateFilter("classification", v)} allLabel="All" />
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Type</div>
-            <select value={filters.type||""} onChange={(e)=>updateFilter("type", e.target.value)}>
-              <option value="">All</option>
-              {typeOptions.map(o=><option key={o} value={o}>{o}</option>)}
-            </select>
+            <MultiSelectFilter options={typeOptions} value={filterSel(filters.type)} onChange={(v)=>updateFilter("type", v)} allLabel="All" />
           </div>
           <div className="filter-field">
             <div className="filter-field-label">DOT List As Of</div>
@@ -4132,7 +4129,7 @@ function AccreditationSection({data, setData, isAdmin}){
           {onlyNotAccred
             ? "Showing enterprises with no accreditation on file (Year and Month do not apply)."
             : dotSel.length ? "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " that came with the DOT list as of " + dotSel.map(formatDateDisplay).join("; ") + ". One row per enterprise per year (the accreditation in force, i.e. latest Valid Until)."
-            : "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " for " + (filters.month ? filters.month + " " : "") + statYear + ". One row per enterprise per year (the accreditation in force, i.e. latest Valid Until). Year is required; Month is optional."}
+            : "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " for " + (monthSel.length ? monthSel.join(", ") + " " : "") + statYear + ". One row per enterprise per year (the accreditation in force, i.e. latest Valid Until). Year is required; Month is optional."}
         </div>
         <div className="table-wrap">
           <table>
@@ -4152,7 +4149,7 @@ function AccreditationSection({data, setData, isAdmin}){
                   <td>{r.h && r.h.dotAsOf ? formatDateDisplay(r.h.dotAsOf) : "—"}</td>
                   <td>
                     <Pill tone={accredStatusTone(r.status)}>{r.status}</Pill>
-                    {r.expiryIn && <div className="cell-sub">{r.status==="Expired" ? "Expired " : "Expires "}{filters.month ? "this month" : "in " + statYear}</div>}
+                    {r.expiryIn && <div className="cell-sub">{r.status==="Expired" ? "Expired " : "Expires "}{monthSel.length ? "in the selected month" + (monthSel.length===1 ? "" : "s") : "in " + statYear}</div>}
                   </td>
                   <td>
                     <div className="actions-cell">
@@ -4521,10 +4518,10 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const cur = REPORTS.find(r=>r.id===report);
 
   const estabList = establishments.filter(d =>
-    (!filters.classification || d.classification===filters.classification) &&
-    (!filters.type || d.type===filters.type) &&
-    (!filters.estatus || d.status===filters.estatus) &&
-    (!filters.municipality || d.municipality===filters.municipality));
+    matchSel(filters.classification, d.classification) &&
+    matchSel(filters.type, d.type) &&
+    matchSel(filters.estatus, d.status) &&
+    matchSel(filters.municipality, d.municipality));
   const estabCounts = list => {
     const st = list.map(getAccredState);
     return [
@@ -4542,9 +4539,9 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     ];
   };
   const attrList = attractions.filter(d =>
-    (!filters.category || d.category===filters.category) &&
-    (!filters.selection || d.selection===filters.selection) &&
-    (!filters.municipality || d.municipality===filters.municipality));
+    matchSel(filters.category, d.category) &&
+    matchSel(filters.selection, d.selection) &&
+    matchSel(filters.municipality, d.municipality));
   const attrCounts = list => [
     list.length,
     list.filter(d=>d.selection==="Existing").length,
@@ -4607,7 +4604,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     municipality: munis, category: CATS, selection: ATTRACTION_SELECTIONS,
   };
   const FILTER_LABELS = {classification:"Classification", type:"Type", estatus:"Enterprise Status", municipality:"Municipality", category:"Category", selection:"Status"};
-  const filterText = fields.filter(f=>filters[f.key]).map(f=>FILTER_LABELS[f.key]+": "+filters[f.key]).join("  |  ") || "None (all records)";
+  const filterText = fields.filter(f=>filterSel(filters[f.key]).length).map(f=>FILTER_LABELS[f.key]+": "+filterSel(filters[f.key]).join(", ")).join("  |  ") || "None (all records)";
   const generated = now.toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"});
   const fmt = c => typeof c==="number" ? c.toLocaleString() : c;
   const numCls = j => (j>=numStart ? " ar-r" : "") + (j===numStart ? " ar-key" : "");
@@ -4643,11 +4640,10 @@ function AnalyticsSection({establishments, attractions, cbtos}){
       </div>
       <div className="ar-controls">
         {fields.map(f=>(
-          <select key={f.key} className="ar-select" value={filters[f.key]||""}
-            onChange={e=>{ const v=e.target.value; setFilters(prev=>({...prev,[f.key]:v})); }}>
-            <option value="">{f.all}</option>
-            {(options[f.key]||[]).map(o=><option key={o} value={o}>{o}</option>)}
-          </select>
+          <div key={f.key} style={{minWidth:170}}>
+            <MultiSelectFilter options={options[f.key]||[]} value={filterSel(filters[f.key])} allLabel={f.all}
+              onChange={v=>setFilters(prev=>({...prev,[f.key]:v}))} />
+          </div>
         ))}
         <button className="ar-btn-print" onClick={handlePrint}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
