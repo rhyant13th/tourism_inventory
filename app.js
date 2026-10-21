@@ -95,7 +95,21 @@ const SECONDARY_TYPES = [
 ];
 
 const CLASSIFICATIONS = ["Primary Enterprises","Secondary Enterprises"];
-const MUNICIPALITIES = ["Abra de Ilog","Calintaan","Looc","Lubang","Magsaysay","Mamburao","Paluan","Rizal","Sablayan","San Jose","Sta. Cruz"];
+const MUNICIPALITIES = ["Abra de Ilog","Calintaan","Looc","Lubang","Magsaysay","Mamburao","Paluan","Rizal","Sablayan","San Jose","Sta. Cruz"]
+  .sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:"base"}));
+
+// LGU ORDER RULE (used by every list, dropdown, filter and table that shows LGUs):
+// the Province itself is always on top, then the municipalities in A-Z order.
+const PROVINCE_NAME = "Occidental Mindoro";
+function isProvinceLGU(v){
+  const s = String(v||"").trim().toLowerCase();
+  return s==="province-wide" || s==="province" || s==="occidental mindoro" || s.startsWith("province of") || s.startsWith("provincial");
+}
+function compareLGU(a, b){
+  const pa = isProvinceLGU(a) ? 0 : 1, pb = isProvinceLGU(b) ? 0 : 1;
+  if(pa !== pb) return pa - pb;
+  return String(a||"").localeCompare(String(b||""), undefined, {sensitivity:"base"});
+}
 const ACCRED_STATUSES = ["Accredited","Not Accredited"];
 
 // "Level of Accreditation": Primary Enterprises get Regular/Basic; Secondary Enterprises
@@ -251,7 +265,7 @@ const DIRECTORY_HEADERS = [
 const CALENDAR_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 // A calendar event can belong to one municipality, the whole province, or several municipalities
 // (for several, pick "Multiple Municipalities" and name them in "Other Location Details").
-const CALENDAR_LOCATIONS = [...MUNICIPALITIES, "Province-wide", "Multiple Municipalities"];
+const CALENDAR_LOCATIONS = [...MUNICIPALITIES, "Province-wide", "Multiple Municipalities"].sort(compareLGU);
 const CALENDAR_CATEGORIES = ["Festival","Founding Anniversary","Feast / Fiesta","Parade / Procession","Trade Fair / Market","Observance / Awareness","Christmas / Holiday","Commemoration","Other"];
 const CALENDAR_STATUSES = ["Scheduled","Tentative","Postponed","Cancelled","Completed"];
 const CALENDAR_HEADERS = [
@@ -659,6 +673,7 @@ function accredExpiringSoon(list, days){
 // Rows of the Accreditation records list / print report: one row per accreditation period
 // in the selected year / month. Status "Not Accredited" lists enterprises with no period at all.
 function accredRecordRows(list, year, month, statusFilter, dotFilter){
+  const dotSel = Array.isArray(dotFilter) ? dotFilter : (dotFilter ? [dotFilter] : []);
   const sel = Array.isArray(statusFilter) ? statusFilter : (statusFilter ? [statusFilter] : []);
   const wantNone = sel.includes("Not Accredited");
   const periodSel = sel.filter(x => x !== "Not Accredited");
@@ -668,7 +683,7 @@ function accredRecordRows(list, year, month, statusFilter, dotFilter){
       const hist = getAccredHistory(d);
       hist.forEach(h=>{
         // Choosing a DOT list lists everything that came with that file (year / month do not limit it)
-        if(dotFilter){ if(h.dotAsOf !== dotFilter) return; }
+        if(dotSel.length){ if(!dotSel.includes(h.dotAsOf)) return; }
         else if(!accredPeriodInScope(h, year, month)) return;
         const status = accredPeriodStatus(h, year);
         if(periodSel.length && !periodSel.includes(status)) return;
@@ -680,7 +695,24 @@ function accredRecordRows(list, year, month, statusFilter, dotFilter){
       });
     });
   }
-  if(wantNone && !dotFilter){
+  // ONE ROW PER ENTERPRISE PER YEAR: an enterprise with several accreditation periods / DOT lists in
+  // the same year (e.g. DOT as of Jul 12, Sep 6 and Oct 5, 2022) is shown once for that year, using the
+  // accreditation in force = the one with the latest Valid Until (ties: later DOT date, then later Date Accredited).
+  const better = (a, b) =>
+    ((a.h.validity||"").localeCompare(b.h.validity||"")) ||
+    ((a.h.dotAsOf||"").localeCompare(b.h.dotAsOf||"")) ||
+    ((a.h.accredDate||"").localeCompare(b.h.accredDate||""));
+  const best = new Map();
+  rows.forEach(r=>{
+    const yr = dotSel.length ? String(yearOfISO(r.h.dotAsOf)) : String(year);   // with a DOT filter, group by the DOT list's year
+    const key = r.d.id + "|" + yr;
+    const cur = best.get(key);
+    if(!cur || better(r, cur) > 0) best.set(key, r);
+  });
+  rows.length = 0;
+  best.forEach(r=>rows.push(r));
+
+  if(wantNone && !dotSel.length){
     list.filter(d=>getAccredHistory(d).length===0).forEach(d=>{
       rows.push({ d, h:null, status:"Not Accredited", renewed:false, accredIn:false, expiryIn:false });
     });
@@ -769,7 +801,8 @@ function normalizeDirectoryRecord(d){
   const base = d || {};
   const name = base.name !== undefined && base.name !== "" ? base.name : (base.officerName || "");
   const municipality = base.municipality !== undefined && base.municipality !== "" ? base.municipality : (base.lguName || "");
-  const category = DIRECTORY_CATEGORIES.includes(base.category) ? base.category : "Tourism Officer";
+  // Categories can now be added/renamed by the user, so any non-empty text is kept.
+  const category = String(base.category || "").trim() || "Tourism Officer";
   const status = DIRECTORY_STATUSES.includes(base.status) ? base.status : "Active";
   return {
     ...base,
@@ -797,7 +830,8 @@ function parseDirectoryRow(row){
   const name = String(row["Name"]||"").trim();
   const year = String(row["Year"]||"").trim();
   if(!name || !year) return null;
-  const category = matchFromList(row["Category"], DIRECTORY_CATEGORIES);
+  const categoryText = String(row["Category"]||"").trim();
+  const category = matchFromList(categoryText, DIRECTORY_CATEGORIES) || categoryText || "Others";
   const status = matchFromList(row["Status"], DIRECTORY_STATUSES);
   return {
     provinceCity: String(row["Province/City"]||"").trim(),
@@ -807,7 +841,7 @@ function parseDirectoryRow(row){
     officeAgency: String(row["Office/Agency"]||"").trim(),
     contact: String(row["Contact Number"]||"").trim(),
     email: String(row["Email Address"]||"").trim(),
-    category: DIRECTORY_CATEGORIES.includes(category) ? category : "Others",
+    category,
     year,
     status: DIRECTORY_STATUSES.includes(status) ? status : "Active",
   };
@@ -1238,9 +1272,10 @@ function withTimeout(promise, ms, label){
   ]);
 }
 
-async function saveInventoryToCloud(establishments, attractions, cbtos, officers, calendar){
+async function saveInventoryToCloud(establishments, attractions, cbtos, officers, calendar, directoryCategories){
   await withTimeout(CLOUD_DOC().set({
     establishments, attractions, cbtos: cbtos||[], officers: officers||[], calendar: calendar||[],
+    directoryCategories: (directoryCategories && directoryCategories.length) ? directoryCategories : DIRECTORY_CATEGORIES,
     updatedAt: new Date().toISOString(),
   }), 15000, "Saving");
 }
@@ -2577,9 +2612,27 @@ const emptyDirectoryRecord = {
   status: "Active",
 };
 
-function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions}){
+const DIRECTORY_PLURALS = {"Elected Official":"Elected Officials","PTC Member":"PTC Members","Department Head":"Department Heads","Tourism Officer":"Tourism Officers","Others":"Others"};
+
+function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, categories, onAddCategory, onRenameCategory, categoryCount}){
   const [f, setF] = useState(() => normalizeDirectoryRecord(initial || emptyDirectoryRecord));
   const [dupeWarning, setDupeWarning] = useState(null);
+  // Add / Edit category: small inline editor under the Category dropdown
+  const [catMode, setCatMode] = useState(null);   // null | "add" | "edit"
+  const [catText, setCatText] = useState("");
+  const [catError, setCatError] = useState("");
+  const startCat = (mode) => { setCatMode(mode); setCatText(mode==="edit" ? f.category : ""); setCatError(""); };
+  const cancelCat = () => { setCatMode(null); setCatText(""); setCatError(""); };
+  const saveCat = () => {
+    const name = catText.trim().replace(/\s+/g, " ");
+    if(!name){ setCatError("Please type a category name."); return; }
+    let err = "";
+    if(catMode==="add") err = onAddCategory(name);
+    else if(name !== f.category) err = onRenameCategory(f.category, name);
+    if(err){ setCatError(err); return; }
+    setF(prev=>({...prev, category: name}));
+    cancelCat();
+  };
   const set = (k) => (e) => {
     const v = e && e.target ? e.target.value : e;
     setF(prev=>({...prev, [k]: v}));
@@ -2633,7 +2686,7 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions})
       <Field label="Municipality" required>
         <input type="text" list="directory-municipality-options" value={f.municipality} onChange={set("municipality")} placeholder="e.g. Mamburao, or any municipality/province" />
         <datalist id="directory-municipality-options">
-          {MUNICIPALITIES.map(m=><option key={m} value={m} />)}
+          {[PROVINCE_NAME, ...MUNICIPALITIES].map(m=><option key={m} value={m} />)}
         </datalist>
       </Field>
       <Field label="Name" required><input type="text" value={f.name} onChange={set("name")} placeholder="Full name" /></Field>
@@ -2648,8 +2701,34 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions})
       <Field label="Email Address"><input type="email" value={f.email} onChange={set("email")} /></Field>
       <Field label="Category" required>
         <select value={f.category} onChange={set("category")}>
-          {DIRECTORY_CATEGORIES.map(o=><option key={o} value={o}>{o}</option>)}
+          {(categories.includes(f.category) ? categories : [...categories, f.category]).map(o=><option key={o} value={o}>{o}</option>)}
         </select>
+        {!catMode && (
+          <div style={{display:"flex", gap:6, marginTop:6}}>
+            <button type="button" className="btn btn-outline-teal btn-sm" onClick={()=>startCat("add")}><Icon d={ICONS.plus} size={12} color="#1C6B6E" /> Add Category</button>
+            <button type="button" className="btn btn-outline-teal btn-sm" onClick={()=>startCat("edit")}><Icon d={ICONS.edit} size={12} color="#1C6B6E" /> Edit Category</button>
+          </div>
+        )}
+        {catMode && (
+          <div style={{marginTop:6, padding:8, border:"1px solid var(--border)", borderRadius:8, background:"var(--bg, #f7f8f8)"}}>
+            <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>
+              {catMode==="add" ? "New category name" : "Rename \"" + f.category + "\""}
+            </div>
+            <input type="text" value={catText} autoFocus onChange={e=>{ setCatText(e.target.value); setCatError(""); }}
+              onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); saveCat(); } }}
+              placeholder={catMode==="add" ? "e.g. Barangay Official" : "New name"} />
+            {catMode==="edit" && (
+              <div style={{fontSize:11, color:"var(--subtext)", marginTop:4}}>
+                Renaming applies to all {categoryCount(f.category)} record(s) using this category.
+              </div>
+            )}
+            {catError && <div style={{fontSize:12, color:"var(--danger)", marginTop:4}}>{catError}</div>}
+            <div style={{display:"flex", gap:6, marginTop:6}}>
+              <button type="button" className="btn btn-sm" onClick={cancelCat}>Cancel</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={saveCat}>{catMode==="add" ? "Add" : "Save Name"}</button>
+            </div>
+          </div>
+        )}
       </Field>
       <Field label="Year" required><input type="text" inputMode="numeric" value={f.year} onChange={set("year")} placeholder="e.g. 2026" /></Field>
       <Field label="Status">
@@ -2700,8 +2779,28 @@ function DirectoryViewInfo({item, onEdit, onClose, isAdmin}){
 // Directory: general directory of tourism-related personnel (formerly "Tourism Officers
 // Directory"). All records are non-destructively normalized via normalizeDirectoryRecord
 // so existing officer entries keep working and display as "Tourism Officer".
-function DirectorySection({data: rawData, setData, isAdmin}){
+function DirectorySection({data: rawData, setData, isAdmin, categories: savedCategories, setCategories}){
   const data = useMemo(()=>rawData.map(normalizeDirectoryRecord), [rawData]);
+
+  // Category list = the saved list + any category found in records (e.g. from an Excel import)
+  const categories = useMemo(()=>{
+    const base = (savedCategories && savedCategories.length) ? savedCategories : DIRECTORY_CATEGORIES;
+    const extra = [...new Set(data.map(d=>d.category).filter(c=>c && !base.includes(c)))];
+    return [...base, ...extra];
+  }, [savedCategories, data]);
+  const addCategory = (name) => {
+    if(categories.some(c=>c.toLowerCase()===name.toLowerCase())) return "That category already exists.";
+    if(setCategories) setCategories([...categories, name]);
+    return "";
+  };
+  const renameCategory = (oldName, newName) => {
+    if(newName.toLowerCase()!==oldName.toLowerCase() && categories.some(c=>c.toLowerCase()===newName.toLowerCase())) return "That category already exists.";
+    if(setCategories) setCategories(categories.map(c=>c===oldName ? newName : c));
+    setData(prev=>prev.map(d=> normalizeDirectoryRecord(d).category===oldName ? {...d, category:newName} : d));
+    setFilters(prev=> prev.category===oldName ? {...prev, category:newName} : prev);
+    return "";
+  };
+  const categoryCount = (name) => data.filter(d=>d.category===name).length;
 
   const [view, setView] = useState("dashboard");
   const [search, setSearch] = useState("");
@@ -2719,13 +2818,30 @@ function DirectorySection({data: rawData, setData, isAdmin}){
   };
 
   const options = useMemo(()=>({
-    provinceCity: [...new Set(data.map(d=>d.provinceCity).filter(Boolean))].sort(),
-    municipality: [...new Set(data.map(d=>d.municipality).filter(Boolean))].sort(),
-    category: DIRECTORY_CATEGORIES,
+    provinceCity: [...new Set(data.map(d=>d.provinceCity).filter(Boolean))].sort(compareLGU),
+    municipality: [...new Set(data.map(d=>d.municipality).filter(Boolean))].sort(compareLGU),
+    category: categories,
     officeAgency: [...new Set(data.map(d=>d.officeAgency).filter(Boolean))].sort(),
     year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
     status: DIRECTORY_STATUSES,
-  }), [data]);
+  }), [data, categories]);
+
+  // LGU order for the Directory list and its printout: Province / province-level records first,
+  // then municipalities A-Z, then name A-Z, then newest year first.
+  const lguCompareRecords = useMemo(()=>{
+    const muniSet = new Set(MUNICIPALITIES.map(m=>m.toLowerCase()));
+    const isProvince = d => {
+      const m = (d.municipality||"").trim().toLowerCase();
+      return !m || !muniSet.has(m) || m === (d.provinceCity||"").trim().toLowerCase() || isProvinceLGU(d.municipality);
+    };
+    const cmp = (a,b) => String(a||"").localeCompare(String(b||""), undefined, {sensitivity:"base"});
+    return (a,b) => {
+      const pa = isProvince(a) ? 0 : 1, pb = isProvince(b) ? 0 : 1;
+      if(pa !== pb) return pa - pb;
+      const c = cmp(a.municipality, b.municipality); if(c) return c;
+      return cmp(a.name, b.name) || cmp(b.year, a.year);
+    };
+  }, []);
 
   const filtered = useMemo(()=>{
     const q = search.trim().toLowerCase();
@@ -2741,8 +2857,8 @@ function DirectorySection({data: rawData, setData, isAdmin}){
         if(!hay.includes(q)) return false;
       }
       return true;
-    }).sort((a,b)=>(String(b.year)+a.name).localeCompare(String(a.year)+b.name));
-  }, [data, filters, search]);
+    }).sort(lguCompareRecords);
+  }, [data, filters, search, lguCompareRecords]);
 
   useEffect(()=>{ setPage(1); }, [filters, search, data.length]);
 
@@ -2780,23 +2896,9 @@ function DirectorySection({data: rawData, setData, isAdmin}){
     return ()=>{ clearTimeout(t); window.removeEventListener("afterprint", done); cleanup(); };
   }, [printing]);
 
-  const printList = useMemo(()=>{
-    const muniSet = new Set(MUNICIPALITIES.map(m=>m.toLowerCase()));
-    const isProvince = d => {
-      const m = (d.municipality||"").trim().toLowerCase();
-      return !m || !muniSet.has(m) || m === (d.provinceCity||"").trim().toLowerCase();
-    };
-    const cmp = (a,b) => String(a||"").localeCompare(String(b||""), undefined, {sensitivity:"base"});
-    return [...filtered].sort((a,b)=>{
-      const pa = isProvince(a) ? 0 : 1, pb = isProvince(b) ? 0 : 1;
-      if(pa !== pb) return pa - pb;
-      if(pa === 1){ const c = cmp(a.municipality, b.municipality); if(c) return c; }
-      return cmp(a.name, b.name);
-    });
-  }, [filtered]);
+  const printList = useMemo(()=>[...filtered].sort(lguCompareRecords), [filtered, lguCompareRecords]);
   const printTitle = (() => {
-    const plural = {"Elected Official":"Elected Officials","PTC Member":"PTC Members","Department Head":"Department Heads","Tourism Officer":"Tourism Officers","Others":"Others"};
-    return filters.category ? (plural[filters.category] || filters.category) + " Directory" : "Directory";
+    return filters.category ? (DIRECTORY_PLURALS[filters.category] || filters.category) + " Directory" : "Directory";
   })();
 
   const printFilterText = (() => {
@@ -2884,11 +2986,7 @@ function DirectorySection({data: rawData, setData, isAdmin}){
       <StatCard label="Total Directory Records" value={filtered.length} />
       <StatCard label="Active" value={filtered.filter(d=>d.status==="Active").length} />
       <StatCard label="Inactive" value={filtered.filter(d=>d.status==="Inactive").length} />
-      <StatCard label="Tourism Officers" value={filtered.filter(d=>d.category==="Tourism Officer").length} />
-      <StatCard label="Elected Officials" value={filtered.filter(d=>d.category==="Elected Official").length} />
-      <StatCard label="Department Heads" value={filtered.filter(d=>d.category==="Department Head").length} />
-      <StatCard label="PTC Members" value={filtered.filter(d=>d.category==="PTC Member").length} />
-      <StatCard label="Others" value={filtered.filter(d=>d.category==="Others").length} />
+      {categories.map(c=><StatCard key={c} label={DIRECTORY_PLURALS[c] || c} value={filtered.filter(d=>d.category===c).length} />)}
     </div>
 
     {view==="dashboard" ? (
@@ -2963,7 +3061,8 @@ function DirectorySection({data: rawData, setData, isAdmin}){
     )}
     {modal && isAdmin && (modal.mode==="edit" || modal.mode==="add") && (
       <Modal title={modal.mode==="edit" ? "Edit Directory Record" : "Add Directory Record"} onClose={()=>setModal(null)}>
-        <DirectoryForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} existingData={data} officeOptions={officeOptions} />
+        <DirectoryForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} existingData={data} officeOptions={officeOptions}
+          categories={categories} onAddCategory={addCategory} onRenameCategory={renameCategory} categoryCount={categoryCount} />
       </Modal>
     )}
     {printing && ReactDOM.createPortal(
@@ -3513,7 +3612,8 @@ function AccreditationForm({initial, onCancel, onSave, onDirtyChange}){
 }
 
 // Dropdown with checkboxes: pick one, several, or none (none = all).
-function MultiSelectFilter({options, value, onChange, allLabel}){
+function MultiSelectFilter({options, value, onChange, allLabel, format}){
+  const fmt = format || (x=>x);
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(()=>{
@@ -3523,17 +3623,17 @@ function MultiSelectFilter({options, value, onChange, allLabel}){
   }, []);
   const sel = Array.isArray(value) ? value : [];
   const toggle = (o) => onChange(sel.includes(o) ? sel.filter(x=>x!==o) : [...sel, o]);
-  const label = sel.length===0 ? allLabel : (sel.length<=2 ? sel.join(", ") : sel.length + " selected");
+  const label = sel.length===0 ? allLabel : (sel.length<=2 ? sel.map(fmt).join(", ") : sel.length + " selected");
   return (
     <div ref={ref} style={{position:"relative"}}>
       <button type="button" className="btn" style={{width:"100%", justifyContent:"space-between", textAlign:"left"}} onClick={()=>setOpen(o=>!o)}>
         <span>{label}</span><span>▾</span>
       </button>
       {open && (
-        <div style={{position:"absolute", zIndex:30, top:"100%", left:0, minWidth:"100%", background:"#fff", color:"#1f2937", border:"1px solid #cbd5e1", borderRadius:8, padding:6, boxShadow:"0 6px 18px rgba(0,0,0,.15)"}}>
+        <div style={{position:"absolute", zIndex:30, top:"100%", left:0, minWidth:"100%", maxHeight:280, overflowY:"auto", background:"#fff", color:"#1f2937", border:"1px solid #cbd5e1", borderRadius:8, padding:6, boxShadow:"0 6px 18px rgba(0,0,0,.15)"}}>
           {options.map(o=>(
             <label key={o} style={{display:"flex", gap:8, alignItems:"center", padding:"6px 8px", cursor:"pointer", fontSize:13, whiteSpace:"nowrap"}}>
-              <input type="checkbox" checked={sel.includes(o)} onChange={()=>toggle(o)} style={{width:"auto"}} />{o}
+              <input type="checkbox" checked={sel.includes(o)} onChange={()=>toggle(o)} style={{width:"auto"}} />{fmt(o)}
             </label>
           ))}
           {sel.length>0 && <button type="button" className="clear-btn" onClick={()=>onChange([])}>Clear</button>}
@@ -3612,12 +3712,13 @@ function AccreditationSection({data, setData, isAdmin}){
     return Object.entries(m).map(([date,set])=>({date, count:set.size})).sort((a,b)=>a.date.localeCompare(b.date));
   }, [scoped, statYear]);
   const statusSel = Array.isArray(filters.status) ? filters.status : [];
+  const dotSel = Array.isArray(filters.dot) ? filters.dot : (filters.dot ? [filters.dot] : []);
   const onlyNotAccred = statusSel.length===1 && statusSel[0]==="Not Accredited";
 
   const printFilters = {
     year: statYear, month: filters.month, name: filters.name, municipality: filters.municipality,
     classification: filters.classification, type: filters.type, status: statusSel.join(", "),
-    dot: filters.dot ? formatDateDisplay(filters.dot) : "",
+    dot: dotSel.map(formatDateDisplay).join(", "),
   };
 
   // Saves only the accreditation history onto the existing enterprise record.
@@ -3778,7 +3879,7 @@ function AccreditationSection({data, setData, isAdmin}){
                       <tr key={r.date} className={i%2?"odd":""}>
                         <td>{formatDateDisplay(r.date)}</td>
                         <td>{r.count}</td>
-                        <td><button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFilters({dot: r.date, ...(statMunicipality ? {municipality: statMunicipality} : {})}); setView("records"); }}>View records</button></td>
+                        <td><button className="btn btn-outline-teal btn-sm" onClick={()=>{ setFilters({dot: [r.date], ...(statMunicipality ? {municipality: statMunicipality} : {})}); setView("records"); }}>View records</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -3845,10 +3946,7 @@ function AccreditationSection({data, setData, isAdmin}){
           </div>
           <div className="filter-field">
             <div className="filter-field-label">DOT List As Of</div>
-            <select value={filters.dot||""} onChange={(e)=>updateFilter("dot", e.target.value)}>
-              <option value="">All</option>
-              {dotOptions.map(o=><option key={o} value={o}>{formatDateDisplay(o)}</option>)}
-            </select>
+            <MultiSelectFilter options={dotOptions} value={dotSel} onChange={(v)=>updateFilter("dot", v)} allLabel="All" format={formatDateDisplay} />
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Status</div>
@@ -3859,8 +3957,8 @@ function AccreditationSection({data, setData, isAdmin}){
         <div style={{fontSize:12, color:"var(--subtext)", margin:"8px 0"}}>
           {onlyNotAccred
             ? "Showing enterprises with no accreditation on file (Year and Month do not apply)."
-            : filters.dot ? "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " that came with the DOT list as of " + formatDateDisplay(filters.dot) + "."
-            : "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " for " + (filters.month ? filters.month + " " : "") + statYear + ". Year is required; Month is optional."}
+            : dotSel.length ? "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " that came with the DOT list as of " + dotSel.map(formatDateDisplay).join("; ") + ". One row per enterprise per year (the accreditation in force, i.e. latest Valid Until)."
+            : "Showing " + records.length + " accreditation record" + (records.length===1?"":"s") + " for " + (filters.month ? filters.month + " " : "") + statYear + ". One row per enterprise per year (the accreditation in force, i.e. latest Valid Until). Year is required; Month is optional."}
         </div>
         <div className="table-wrap">
           <table>
@@ -4380,6 +4478,7 @@ function App(){
   const [cbtos, setCbtos] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [calendarEvents, setCalendarEvents] = useState([]);
+  const [dirCategories, setDirCategories] = useState(DIRECTORY_CATEGORIES);
   const [cloudStatus, setCloudStatus] = useState("loading");
   const [lastSaved, setLastSaved] = useState(null);
   const [cloudError, setCloudError] = useState("");
@@ -4406,6 +4505,7 @@ function App(){
         setCbtos(Array.isArray(data.cbtos) ? data.cbtos : []);
         setOfficers(Array.isArray(data.officers) ? data.officers : []);
         setCalendarEvents(Array.isArray(data.calendar) ? data.calendar : []);
+        if(Array.isArray(data.directoryCategories) && data.directoryCategories.length) setDirCategories(data.directoryCategories);
         if(data.updatedAt) setLastSaved(data.updatedAt);
       }
       setCloudStatus("idle");
@@ -4420,7 +4520,7 @@ function App(){
     if (!isAdmin) return;
     setCloudStatus("saving");
     try {
-      await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents);
+      await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents, dirCategories);
       setLastSaved(new Date().toISOString());
       setCloudStatus("idle");
     } catch(err){
@@ -4518,7 +4618,7 @@ function App(){
       <CbtoSection data={cbtos} setData={setCbtos} isAdmin={isAdmin} />
     )}
     {tab === "officers" && (
-      <DirectorySection data={officers} setData={setOfficers} isAdmin={isAdmin} />
+      <DirectorySection data={officers} setData={setOfficers} isAdmin={isAdmin} categories={dirCategories} setCategories={setDirCategories} />
     )}
     {tab === "calendar" && (
       <CalendarSection data={calendarEvents} setData={setCalendarEvents} isAdmin={isAdmin} />
