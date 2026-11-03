@@ -257,7 +257,7 @@ const DIRECTORY_STATUSES = ["Active","Inactive"];
 
 const DIRECTORY_HEADERS = [
   "No.","Province/City","Municipality","Name","Position/Designation","Office/Agency",
-  "Contact Number","Email Address","Category","Year","Status",
+  "Contact Number","Email Address","Category","Year","Term Start","Term End","Status",
 ];
 
 // ---- Calendar of Activities ----
@@ -422,6 +422,34 @@ function cbtoTotalMembers(d){
 
 // Duplicate check per spec: same Name + Municipality + Year + Category (name compared
 // fuzzily so near-identical spellings are still flagged).
+// Term of office (optional), stored as "YYYY-MM" text, e.g. termStart "2022-07", termEnd "2025-07".
+const TERM_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const TERM_DEFAULT_MONTH = 7;   // terms start and end in July
+function parseTermMonth(v){
+  if(v==null || v==="") return "";
+  if(v instanceof Date && !isNaN(v)) return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0");
+  const t = String(v).trim();
+  let m = t.match(/^(\d{4})-(\d{1,2})/);
+  if(m && Number(m[2])>=1 && Number(m[2])<=12) return m[1]+"-"+String(Number(m[2])).padStart(2,"0");
+  m = t.match(/([A-Za-z]{3,9})\.?\s+(?:\d{1,2},?\s+)?(\d{4})/);
+  if(m){
+    const i = TERM_MONTHS.findIndex(n=>n.toLowerCase().startsWith(m[1].toLowerCase().slice(0,3)));
+    if(i>=0) return m[2]+"-"+String(i+1).padStart(2,"0");
+  }
+  return "";
+}
+function termMonthLabel(v){
+  const m = String(v||"").match(/^(\d{4})-(\d{2})$/);
+  return m ? TERM_MONTHS[Number(m[2])-1].slice(0,3)+" "+m[1] : "";
+}
+function formatDirectoryTerm(d){
+  const a = termMonthLabel(d && d.termStart), b = termMonthLabel(d && d.termEnd);
+  if(a && b) return a+" – "+b;
+  if(a) return "From "+a;
+  if(b) return "Until "+b;
+  return "";
+}
+
 // A directory record can cover several years (e.g. an elected official with a 3-year term:
 // 2022, 2023, 2024). Accepts an array, "2022, 2023, 2024", or a range like "2022-2024"
 // and always returns a sorted array of year strings.
@@ -858,6 +886,8 @@ function normalizeDirectoryRecord(d){
     category,
     years,
     year: years.join(", "),
+    termStart: parseTermMonth(base.termStart),
+    termEnd: parseTermMonth(base.termEnd),
     status,
   };
 }
@@ -865,7 +895,7 @@ function normalizeDirectoryRecord(d){
 function buildDirectoryRows(list){
   return list.map((d,i)=>[
     i+1, d.provinceCity||"", d.municipality||"", d.name||"", d.position||"", d.officeAgency||"",
-    d.contact||"", d.email||"", d.category||"", d.year||"", d.status||"",
+    d.contact||"", d.email||"", d.category||"", d.year||"", termMonthLabel(d.termStart), termMonthLabel(d.termEnd), d.status||"",
   ]);
 }
 
@@ -888,6 +918,8 @@ function parseDirectoryRow(row){
     category,
     years,
     year,
+    termStart: parseTermMonth(row["Term Start"]),
+    termEnd: parseTermMonth(row["Term End"]),
     status: DIRECTORY_STATUSES.includes(status) ? status : "Active",
   };
 }
@@ -2684,6 +2716,7 @@ const emptyDirectoryRecord = {
   provinceCity: "", municipality: "", name: "", position: "", officeAgency: "",
   contact: "", email: "", category: "Tourism Officer",
   years: [String(new Date().getFullYear())], year: String(new Date().getFullYear()),
+  termStart: "", termEnd: "",
   status: "Active",
 };
 
@@ -2696,6 +2729,7 @@ const DIR_PRINT_COLS = [
   ["Office/Agency", 16, d=>d.officeAgency || "—"],
   ["Contact Number", 11, d=>d.contact || "—"],
   ["Email Address", 13, d=>d.email || "—"],
+  ["Term", 12, d=>formatDirectoryTerm(d) || "—"],
 ];
 
 const DIRECTORY_PLURALS = {"Elected Official":"Elected Officials","PTC Member":"PTC Members","Department Head":"Department Heads","Tourism Officer":"Tourism Officers","Others":"Others"};
@@ -2714,10 +2748,26 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
     setF(prev=>({...prev, years: clean, year: clean.join(", ")}));
   };
   const toggleYear = (y) => setYears(years.includes(y) ? years.filter(x=>x!==y) : [...years, y]);
+  // Quick term: ticks the term years and sets July-to-July term dates (e.g. 2022 for 3 years
+  // = years 2022, 2023, 2024 and term July 2022 to July 2025).
+  const pad2 = n => String(n).padStart(2,"0");
   const fillTerm = () => {
     const a = Number(termStart), n = Number(termLen);
-    setYears(Array.from({length:n}, (_,i)=>String(a+i)));
+    const clean = Array.from({length:n}, (_,i)=>String(a+i));
+    setF(prev=>({...prev, years: clean, year: clean.join(", "),
+      termStart: a+"-"+pad2(TERM_DEFAULT_MONTH), termEnd: (a+n)+"-"+pad2(TERM_DEFAULT_MONTH)}));
   };
+  // Term start / end pickers (month + year). Choosing one part fills a sensible default for the other.
+  const splitTerm = v => { const m = /^(\d{4})-(\d{2})$/.exec(v||""); return m ? [m[1], String(Number(m[2]))] : ["",""]; };
+  const setTermPart = (key, part, val) => setF(prev=>{
+    let [y, mo] = splitTerm(prev[key]);
+    if(part==="y") y = val; else mo = val;
+    if(!y && !mo) return {...prev, [key]: ""};
+    if(!y) y = (splitTerm(prev.termStart)[0]) || String(curYear);
+    if(!mo) mo = String(TERM_DEFAULT_MONTH);
+    return {...prev, [key]: y+"-"+pad2(Number(mo))};
+  });
+  const clearTerm = () => setF(prev=>({...prev, termStart:"", termEnd:""}));
   const addCustomYear = () => {
     const y = customYear.trim();
     if(!/^\d{4}$/.test(y)){ alert("Please type a 4-digit year, e.g. 2030."); return; }
@@ -2756,6 +2806,10 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
   const submit = () => {
     if(!f.name || !f.municipality || !f.category || !years.length){
       alert("Please complete name, municipality, category, and at least one year.");
+      return;
+    }
+    if(f.termStart && f.termEnd && f.termEnd < f.termStart){
+      alert("Term End cannot be earlier than Term Start.");
       return;
     }
     const dupes = findPossibleDirectoryDuplicates(f, existingData, f.id);
@@ -2846,7 +2900,7 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
         <span className="field-label">Year(s) <span className="req">*</span> <span style={{fontWeight:400}}>— tick every year covered (e.g. a 3-year term: 2022, 2023, 2024)</span></span>
         <div className="year-picker">
           <div className="year-term-row">
-            <span>Quick term:</span>
+            <span>Quick term (July to July):</span>
             <select value={termStart} onChange={e=>setTermStart(e.target.value)} aria-label="Start year">
               {yearChoices.map(y=><option key={y} value={y}>{y}</option>)}
             </select>
@@ -2868,6 +2922,28 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
               onChange={e=>setCustomYear(e.target.value.replace(/\D/g,""))}
               onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addCustomYear(); } }} style={{width:90}} />
             <button type="button" className="btn btn-sm" onClick={addCustomYear}>Add</button>
+          </div>
+          <div className="year-term-row" style={{marginTop:8}}>
+            <span><b>Term of office</b> (optional):</span>
+            <span>Start</span>
+            <select value={splitTerm(f.termStart)[1]} onChange={e=>setTermPart("termStart","m",e.target.value)} aria-label="Term start month">
+              <option value="">Month</option>
+              {TERM_MONTHS.map((n,i)=><option key={n} value={String(i+1)}>{n}</option>)}
+            </select>
+            <select value={splitTerm(f.termStart)[0]} onChange={e=>setTermPart("termStart","y",e.target.value)} aria-label="Term start year">
+              <option value="">Year</option>
+              {yearChoices.map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+            <span>End</span>
+            <select value={splitTerm(f.termEnd)[1]} onChange={e=>setTermPart("termEnd","m",e.target.value)} aria-label="Term end month">
+              <option value="">Month</option>
+              {TERM_MONTHS.map((n,i)=><option key={n} value={String(i+1)}>{n}</option>)}
+            </select>
+            <select value={splitTerm(f.termEnd)[0]} onChange={e=>setTermPart("termEnd","y",e.target.value)} aria-label="Term end year">
+              <option value="">Year</option>
+              {[...new Set([...yearChoices, String(yearHi+1), String(yearHi+2)])].sort().map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+            <button type="button" className="btn btn-sm" onClick={clearTerm} disabled={!f.termStart && !f.termEnd}>Clear term</button>
           </div>
           <div className="year-selected">Selected: {years.length ? <b>{years.join(", ")}</b> : <i>none yet</i>}</div>
         </div>
@@ -2906,6 +2982,7 @@ function DirectoryViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Email Address" value={item.email} />
       <ViewField label="Category" value={item.category} />
       <ViewField label={(item.years||[]).length>1 ? "Years" : "Year"} value={item.year} />
+      <ViewField label="Term of Office" value={formatDirectoryTerm(item)} />
       <ViewField label="Status" value={item.status} />
     </div>
     <div className="form-actions">
@@ -3169,7 +3246,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
                   <td>{d.contact || <span className="cell-sub">—</span>}</td>
                   <td>{d.email || <span className="cell-sub">—</span>}</td>
                   <td><Pill tone={directoryCategoryTone(d.category)}>{d.category}</Pill></td>
-                  <td>{d.year}</td>
+                  <td>{d.year}{formatDirectoryTerm(d) && <div className="cell-sub">{formatDirectoryTerm(d)}</div>}</td>
                   <td><Pill tone={d.status==="Active"?"teal":"danger"}>{d.status}</Pill></td>
                   <td>
                     <div className="actions-cell">
