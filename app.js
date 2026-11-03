@@ -2737,10 +2737,8 @@ const DIRECTORY_PLURALS = {"Elected Official":"Elected Officials","PTC Member":"
 function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, categories, onAddCategory, onRenameCategory, categoryCount}){
   const [f, setF] = useState(() => normalizeDirectoryRecord(initial || emptyDirectoryRecord));
   const [dupeWarning, setDupeWarning] = useState(null);
-  // Year picker: tick one or many years; "Quick term" fills a whole term in one click
+  // Year picker: tick one or many years (e.g. every year of a 3-year term)
   const curYear = new Date().getFullYear();
-  const [termStart, setTermStart] = useState(String(curYear));
-  const [termLen, setTermLen] = useState(3);
   const [customYear, setCustomYear] = useState("");
   const years = f.years || [];
   const setYears = (arr) => {
@@ -2748,15 +2746,7 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
     setF(prev=>({...prev, years: clean, year: clean.join(", ")}));
   };
   const toggleYear = (y) => setYears(years.includes(y) ? years.filter(x=>x!==y) : [...years, y]);
-  // Quick term: ticks the term years and sets July-to-July term dates (e.g. 2022 for 3 years
-  // = years 2022, 2023, 2024 and term July 2022 to July 2025).
   const pad2 = n => String(n).padStart(2,"0");
-  const fillTerm = () => {
-    const a = Number(termStart), n = Number(termLen);
-    const clean = Array.from({length:n}, (_,i)=>String(a+i));
-    setF(prev=>({...prev, years: clean, year: clean.join(", "),
-      termStart: a+"-"+pad2(TERM_DEFAULT_MONTH), termEnd: (a+n)+"-"+pad2(TERM_DEFAULT_MONTH)}));
-  };
   // Term start / end pickers (month + year). Choosing one part fills a sensible default for the other.
   const splitTerm = v => { const m = /^(\d{4})-(\d{2})$/.exec(v||""); return m ? [m[1], String(Number(m[2]))] : ["",""]; };
   const setTermPart = (key, part, val) => setF(prev=>{
@@ -2899,18 +2889,6 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
       </Field>      <div className="field" style={{gridColumn:"1 / -1"}}>
         <span className="field-label">Year(s) <span className="req">*</span> <span style={{fontWeight:400}}>— tick every year covered (e.g. a 3-year term: 2022, 2023, 2024)</span></span>
         <div className="year-picker">
-          <div className="year-term-row">
-            <span>Quick term (July to July):</span>
-            <select value={termStart} onChange={e=>setTermStart(e.target.value)} aria-label="Start year">
-              {yearChoices.map(y=><option key={y} value={y}>{y}</option>)}
-            </select>
-            <span>for</span>
-            <select value={termLen} onChange={e=>setTermLen(e.target.value)} aria-label="Number of years">
-              {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n} year{n>1?"s":""}</option>)}
-            </select>
-            <button type="button" className="btn btn-outline-teal btn-sm" onClick={fillTerm}>Fill years</button>
-            <button type="button" className="btn btn-sm" onClick={()=>setYears([])} disabled={!years.length}>Clear</button>
-          </div>
           <div className="year-chips">
             {yearChoices.map(y=>(
               <button type="button" key={y} className={"year-chip" + (years.includes(y) ? " on" : "")} aria-pressed={years.includes(y)} onClick={()=>toggleYear(y)}>{y}</button>
@@ -2922,6 +2900,7 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
               onChange={e=>setCustomYear(e.target.value.replace(/\D/g,""))}
               onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addCustomYear(); } }} style={{width:90}} />
             <button type="button" className="btn btn-sm" onClick={addCustomYear}>Add</button>
+            <button type="button" className="btn btn-sm" onClick={()=>setYears([])} disabled={!years.length}>Clear years</button>
           </div>
           <div className="year-term-row" style={{marginTop:8}}>
             <span><b>Term of office</b> (optional):</span>

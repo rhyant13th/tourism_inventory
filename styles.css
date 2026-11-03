@@ -1101,3 +1101,4 @@ textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-sof
 .year-chip:hover { border-color: #1C6B6E; }
 .year-chip.on { background: #1C6B6E; border-color: #1C6B6E; color: #fff; }
 .year-selected { font-size: 12px; color: var(--subtext); margin-top: 4px; }
+.year-term-row select, .year-term-row input { width: auto; }
