@@ -469,14 +469,27 @@ function parseDirectoryYears(v){
   return [...out].sort();
 }
 
+// Every year a record covers = the ticked years PLUS every year inside its term of office
+// (e.g. July 2025 to July 2028 covers 2025, 2026, 2027 and 2028). Used by the Year filter.
+function directoryCoveredYears(d){
+  const out = new Set((d && d.years) || []);
+  const a = String((d && d.termStart) || "").match(/^(\d{4})/), b = String((d && d.termEnd) || "").match(/^(\d{4})/);
+  if(a || b){
+    const lo = Number((a||b)[1]), hi = Number((b||a)[1]);
+    if(hi>=lo && hi-lo<=30){ for(let y=lo; y<=hi; y++) out.add(String(y)); }
+    else { if(a) out.add(a[1]); if(b) out.add(b[1]); }
+  }
+  return [...out].sort();
+}
+
 // Duplicate check per spec: same Name + Municipality + Category, and the years overlap
 // (name compared fuzzily so near-identical spellings are still flagged).
 function findPossibleDirectoryDuplicates(f, list, excludeId){
-  const fy = parseDirectoryYears(f.years && f.years.length ? f.years : f.year);
+  const fy = directoryCoveredYears({...f, years: parseDirectoryYears(f.years && f.years.length ? f.years : f.year)});
   return (list||[]).filter(d =>
     d.id!==excludeId &&
     String(d.municipality||"").toLowerCase()===String(f.municipality||"").toLowerCase() &&
-    parseDirectoryYears(d.years && d.years.length ? d.years : d.year).some(y=>fy.includes(y)) &&
+    directoryCoveredYears({...d, years: parseDirectoryYears(d.years && d.years.length ? d.years : d.year)}).some(y=>fy.includes(y)) &&
     String(d.category||"")===String(f.category||"") &&
     isSimilarName(d.name, f.name)
   );
@@ -903,7 +916,8 @@ function parseDirectoryRow(row){
   const name = String(row["Name"]||"").trim();
   const years = parseDirectoryYears(String(row["Year"]||"").trim());
   const year = years.join(", ");
-  if(!name || !year) return null;
+  const termStart = parseTermMonth(row["Term Start"]), termEnd = parseTermMonth(row["Term End"]);
+  if(!name || (!year && !termStart && !termEnd)) return null;
   const categoryText = String(row["Category"]||"").trim();
   const category = matchFromList(categoryText, DIRECTORY_CATEGORIES) || categoryText || "Others";
   const status = matchFromList(row["Status"], DIRECTORY_STATUSES);
@@ -918,8 +932,8 @@ function parseDirectoryRow(row){
     category,
     years,
     year,
-    termStart: parseTermMonth(row["Term Start"]),
-    termEnd: parseTermMonth(row["Term End"]),
+    termStart,
+    termEnd,
     status: DIRECTORY_STATUSES.includes(status) ? status : "Active",
   };
 }
@@ -2794,8 +2808,8 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
   const finalizeSave = (cleaned) => onSave(cleaned);
 
   const submit = () => {
-    if(!f.name || !f.municipality || !f.category || !years.length){
-      alert("Please complete name, municipality, category, and at least one year.");
+    if(!f.name || !f.municipality || !f.category || (!years.length && !f.termStart && !f.termEnd)){
+      alert("Please complete name, municipality, category, and either tick at least one year or set the term of office.");
       return;
     }
     if(f.termStart && f.termEnd && f.termEnd < f.termStart){
@@ -2887,7 +2901,7 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
           </div>
         )}
       </Field>      <div className="field" style={{gridColumn:"1 / -1"}}>
-        <span className="field-label">Year(s) <span className="req">*</span> <span style={{fontWeight:400}}>— tick every year covered (e.g. a 3-year term: 2022, 2023, 2024)</span></span>
+        <span className="field-label">Year(s) <span className="req">*</span> <span style={{fontWeight:400}}>— tick every year covered, or leave blank and set the term of office below</span></span>
         <div className="year-picker">
           <div className="year-chips">
             {yearChoices.map(y=>(
@@ -3021,7 +3035,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
     municipality: [...new Set(data.map(d=>d.municipality).filter(Boolean))].sort(compareLGU),
     category: categories,
     officeAgency: [...new Set(data.map(d=>d.officeAgency).filter(Boolean))].sort(),
-    year: [...new Set(data.flatMap(d=>d.years||[]).filter(Boolean))].sort().reverse(),
+    year: [...new Set(data.flatMap(d=>directoryCoveredYears(d)).filter(Boolean))].sort().reverse(),
     status: DIRECTORY_STATUSES,
   }), [data, categories]);
 
@@ -3050,7 +3064,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
       if(!matchSel(filters.municipality, d.municipality)) return false;
       if(!matchSel(filters.category, d.category)) return false;
       if(!matchSel(filters.officeAgency, d.officeAgency)) return false;
-      { const fy = filterSel(filters.year); if(fy.length && !(d.years||[]).some(y=>fy.includes(y))) return false; }
+      { const fy = filterSel(filters.year); if(fy.length && !directoryCoveredYears(d).some(y=>fy.includes(y))) return false; }
       if(!matchSel(filters.status, d.status)) return false;
       if(q){
         const hay = [d.name,d.position,d.officeAgency,d.contact,d.email].join(" ").toLowerCase();
@@ -3137,7 +3151,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
   const handleExportYear = () => {
     const ys = filterSel(filters.year);
     if(!ys.length){ flashBanner("error", "Select a Year filter first to export that year's records."); return; }
-    exportSubset(data.filter(d=>(d.years||[]).some(y=>ys.includes(y))), "Year-"+ys.join("-"));
+    exportSubset(data.filter(d=>directoryCoveredYears(d).some(y=>ys.includes(y))), "Year-"+ys.join("-"));
   };
 
   return (<div>
