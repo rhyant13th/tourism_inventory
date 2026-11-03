@@ -1090,3 +1090,14 @@ textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-sof
   .cal-date { flex-basis: 100%; }
 }
 
+
+
+/* ---- Directory: multi-year picker ---- */
+.year-picker { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #fff; }
+.year-term-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--subtext); margin: 4px 0; }
+.year-term-row select, .year-term-row input { padding: 4px 8px; font-size: 13px; }
+.year-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.year-chip { border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.year-chip:hover { border-color: #1C6B6E; }
+.year-chip.on { background: #1C6B6E; border-color: #1C6B6E; color: #fff; }
+.year-selected { font-size: 12px; color: var(--subtext); margin-top: 4px; }

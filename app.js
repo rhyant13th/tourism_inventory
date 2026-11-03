@@ -422,11 +422,33 @@ function cbtoTotalMembers(d){
 
 // Duplicate check per spec: same Name + Municipality + Year + Category (name compared
 // fuzzily so near-identical spellings are still flagged).
+// A directory record can cover several years (e.g. an elected official with a 3-year term:
+// 2022, 2023, 2024). Accepts an array, "2022, 2023, 2024", or a range like "2022-2024"
+// and always returns a sorted array of year strings.
+function parseDirectoryYears(v){
+  const out = new Set();
+  const parts = Array.isArray(v) ? v : String(v==null ? "" : v).split(/[,;\/&]|\band\b/i);
+  parts.forEach(part=>{
+    const t = String(part).trim();
+    if(!t) return;
+    const m = t.match(/^(\d{4})\s*(?:-|–|—|to)\s*(\d{4})$/i);
+    if(m){
+      const a = Number(m[1]), b = Number(m[2]);
+      if(b>=a && b-a<=15){ for(let y=a; y<=b; y++) out.add(String(y)); }
+      else { out.add(m[1]); out.add(m[2]); }
+    } else out.add(t);
+  });
+  return [...out].sort();
+}
+
+// Duplicate check per spec: same Name + Municipality + Category, and the years overlap
+// (name compared fuzzily so near-identical spellings are still flagged).
 function findPossibleDirectoryDuplicates(f, list, excludeId){
+  const fy = parseDirectoryYears(f.years && f.years.length ? f.years : f.year);
   return (list||[]).filter(d =>
     d.id!==excludeId &&
     String(d.municipality||"").toLowerCase()===String(f.municipality||"").toLowerCase() &&
-    String(d.year||"").toLowerCase()===String(f.year||"").toLowerCase() &&
+    parseDirectoryYears(d.years && d.years.length ? d.years : d.year).some(y=>fy.includes(y)) &&
     String(d.category||"")===String(f.category||"") &&
     isSimilarName(d.name, f.name)
   );
@@ -821,6 +843,9 @@ function normalizeDirectoryRecord(d){
   // Categories can now be added/renamed by the user, so any non-empty text is kept.
   const category = String(base.category || "").trim() || "Tourism Officer";
   const status = DIRECTORY_STATUSES.includes(base.status) ? base.status : "Active";
+  // "years" (array) is the real value; "year" is kept as the text "2022, 2023, 2024" so the
+  // list, Excel export and older code keep working.
+  const years = parseDirectoryYears(base.years && base.years.length ? base.years : base.year);
   return {
     ...base,
     provinceCity: base.provinceCity || "",
@@ -831,7 +856,8 @@ function normalizeDirectoryRecord(d){
     contact: base.contact || "",
     email: base.email || "",
     category,
-    year: base.year || "",
+    years,
+    year: years.join(", "),
     status,
   };
 }
@@ -845,7 +871,8 @@ function buildDirectoryRows(list){
 
 function parseDirectoryRow(row){
   const name = String(row["Name"]||"").trim();
-  const year = String(row["Year"]||"").trim();
+  const years = parseDirectoryYears(String(row["Year"]||"").trim());
+  const year = years.join(", ");
   if(!name || !year) return null;
   const categoryText = String(row["Category"]||"").trim();
   const category = matchFromList(categoryText, DIRECTORY_CATEGORIES) || categoryText || "Others";
@@ -859,6 +886,7 @@ function parseDirectoryRow(row){
     contact: String(row["Contact Number"]||"").trim(),
     email: String(row["Email Address"]||"").trim(),
     category,
+    years,
     year,
     status: DIRECTORY_STATUSES.includes(status) ? status : "Active",
   };
@@ -2654,7 +2682,8 @@ function CbtoSection({data, setData, isAdmin}){
 
 const emptyDirectoryRecord = {
   provinceCity: "", municipality: "", name: "", position: "", officeAgency: "",
-  contact: "", email: "", category: "Tourism Officer", year: String(new Date().getFullYear()),
+  contact: "", email: "", category: "Tourism Officer",
+  years: [String(new Date().getFullYear())], year: String(new Date().getFullYear()),
   status: "Active",
 };
 
@@ -2674,6 +2703,33 @@ const DIRECTORY_PLURALS = {"Elected Official":"Elected Officials","PTC Member":"
 function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, categories, onAddCategory, onRenameCategory, categoryCount}){
   const [f, setF] = useState(() => normalizeDirectoryRecord(initial || emptyDirectoryRecord));
   const [dupeWarning, setDupeWarning] = useState(null);
+  // Year picker: tick one or many years; "Quick term" fills a whole term in one click
+  const curYear = new Date().getFullYear();
+  const [termStart, setTermStart] = useState(String(curYear));
+  const [termLen, setTermLen] = useState(3);
+  const [customYear, setCustomYear] = useState("");
+  const years = f.years || [];
+  const setYears = (arr) => {
+    const clean = [...new Set(arr)].sort();
+    setF(prev=>({...prev, years: clean, year: clean.join(", ")}));
+  };
+  const toggleYear = (y) => setYears(years.includes(y) ? years.filter(x=>x!==y) : [...years, y]);
+  const fillTerm = () => {
+    const a = Number(termStart), n = Number(termLen);
+    setYears(Array.from({length:n}, (_,i)=>String(a+i)));
+  };
+  const addCustomYear = () => {
+    const y = customYear.trim();
+    if(!/^\d{4}$/.test(y)){ alert("Please type a 4-digit year, e.g. 2030."); return; }
+    setYears([...years, y]);
+    setCustomYear("");
+  };
+  const numericYears = years.map(Number).filter(n=>!isNaN(n));
+  const yearLo = Math.min(curYear-6, ...numericYears), yearHi = Math.max(curYear+8, ...numericYears);
+  const yearChoices = [...new Set([
+    ...Array.from({length: yearHi-yearLo+1}, (_,i)=>String(yearLo+i)),
+    ...years,
+  ])].sort();
   // Add / Edit category: small inline editor under the Category dropdown
   const [catMode, setCatMode] = useState(null);   // null | "add" | "edit"
   const [catText, setCatText] = useState("");
@@ -2698,8 +2754,8 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
   const finalizeSave = (cleaned) => onSave(cleaned);
 
   const submit = () => {
-    if(!f.name || !f.municipality || !f.category || !f.year){
-      alert("Please complete name, municipality, category, and year.");
+    if(!f.name || !f.municipality || !f.category || !years.length){
+      alert("Please complete name, municipality, category, and at least one year.");
       return;
     }
     const dupes = findPossibleDirectoryDuplicates(f, existingData, f.id);
@@ -2786,8 +2842,36 @@ function DirectoryForm({initial, onCancel, onSave, existingData, officeOptions, 
             </div>
           </div>
         )}
-      </Field>
-      <Field label="Year" required><input type="text" inputMode="numeric" value={f.year} onChange={set("year")} placeholder="e.g. 2026" /></Field>
+      </Field>      <div className="field" style={{gridColumn:"1 / -1"}}>
+        <span className="field-label">Year(s) <span className="req">*</span> <span style={{fontWeight:400}}>— tick every year covered (e.g. a 3-year term: 2022, 2023, 2024)</span></span>
+        <div className="year-picker">
+          <div className="year-term-row">
+            <span>Quick term:</span>
+            <select value={termStart} onChange={e=>setTermStart(e.target.value)} aria-label="Start year">
+              {yearChoices.map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+            <span>for</span>
+            <select value={termLen} onChange={e=>setTermLen(e.target.value)} aria-label="Number of years">
+              {[1,2,3,4,5,6].map(n=><option key={n} value={n}>{n} year{n>1?"s":""}</option>)}
+            </select>
+            <button type="button" className="btn btn-outline-teal btn-sm" onClick={fillTerm}>Fill years</button>
+            <button type="button" className="btn btn-sm" onClick={()=>setYears([])} disabled={!years.length}>Clear</button>
+          </div>
+          <div className="year-chips">
+            {yearChoices.map(y=>(
+              <button type="button" key={y} className={"year-chip" + (years.includes(y) ? " on" : "")} aria-pressed={years.includes(y)} onClick={()=>toggleYear(y)}>{y}</button>
+            ))}
+          </div>
+          <div className="year-term-row">
+            <span>Other year:</span>
+            <input type="text" inputMode="numeric" maxLength={4} value={customYear} placeholder="e.g. 2040"
+              onChange={e=>setCustomYear(e.target.value.replace(/\D/g,""))}
+              onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); addCustomYear(); } }} style={{width:90}} />
+            <button type="button" className="btn btn-sm" onClick={addCustomYear}>Add</button>
+          </div>
+          <div className="year-selected">Selected: {years.length ? <b>{years.join(", ")}</b> : <i>none yet</i>}</div>
+        </div>
+      </div>
       <Field label="Status">
         <select value={f.status} onChange={set("status")}>
           {DIRECTORY_STATUSES.map(o=><option key={o} value={o}>{o}</option>)}
@@ -2821,7 +2905,7 @@ function DirectoryViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Contact Number" value={item.contact} />
       <ViewField label="Email Address" value={item.email} />
       <ViewField label="Category" value={item.category} />
-      <ViewField label="Year" value={item.year} />
+      <ViewField label={(item.years||[]).length>1 ? "Years" : "Year"} value={item.year} />
       <ViewField label="Status" value={item.status} />
     </div>
     <div className="form-actions">
@@ -2881,7 +2965,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
     municipality: [...new Set(data.map(d=>d.municipality).filter(Boolean))].sort(compareLGU),
     category: categories,
     officeAgency: [...new Set(data.map(d=>d.officeAgency).filter(Boolean))].sort(),
-    year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
+    year: [...new Set(data.flatMap(d=>d.years||[]).filter(Boolean))].sort().reverse(),
     status: DIRECTORY_STATUSES,
   }), [data, categories]);
 
@@ -2898,7 +2982,8 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
       const pa = isProvince(a) ? 0 : 1, pb = isProvince(b) ? 0 : 1;
       if(pa !== pb) return pa - pb;
       const c = cmp(a.municipality, b.municipality); if(c) return c;
-      return cmp(a.name, b.name) || cmp(b.year, a.year);
+      const ly = d => (d.years && d.years.length) ? d.years[d.years.length-1] : "";
+      return cmp(a.name, b.name) || cmp(ly(b), ly(a));
     };
   }, []);
 
@@ -2909,7 +2994,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
       if(!matchSel(filters.municipality, d.municipality)) return false;
       if(!matchSel(filters.category, d.category)) return false;
       if(!matchSel(filters.officeAgency, d.officeAgency)) return false;
-      if(!matchSel(filters.year, d.year)) return false;
+      { const fy = filterSel(filters.year); if(fy.length && !(d.years||[]).some(y=>fy.includes(y))) return false; }
       if(!matchSel(filters.status, d.status)) return false;
       if(q){
         const hay = [d.name,d.position,d.officeAgency,d.contact,d.email].join(" ").toLowerCase();
@@ -2996,7 +3081,7 @@ function DirectorySection({data: rawData, setData, isAdmin, categories: savedCat
   const handleExportYear = () => {
     const ys = filterSel(filters.year);
     if(!ys.length){ flashBanner("error", "Select a Year filter first to export that year's records."); return; }
-    exportSubset(data.filter(d=>ys.includes(d.year)), "Year-"+ys.join("-"));
+    exportSubset(data.filter(d=>(d.years||[]).some(y=>ys.includes(y))), "Year-"+ys.join("-"));
   };
 
   return (<div>
