@@ -139,6 +139,7 @@ const ESTAB_FIELD_LABELS = {
   bedCapacityNormal: "Bed Capacity (Normal)",
   bedCapacityAdjusted: "Bed Capacity (Adjusted)",
   petFriendly: "Pet Friendly",
+  functionHalls: "Function Hall / Conference Hall Capacity",
   maleEmployees: "Male Employees",
   femaleEmployees: "Female Employees",
   remarks: "Remarks",
@@ -233,7 +234,7 @@ Object.entries(ATTRACTION_CATEGORIES).forEach(([cat, items]) => {
 
 const ESTAB_HEADERS = [
   "No.","Name of Enterprise","Proprietor / Owner","Municipality","Classification","Type",
-  "Address","Contact Number","Email Address","Number of Rooms","Bed Capacity (Normal)","Bed Capacity (Adjusted)","Pet Friendly","Male Employees","Female Employees",
+  "Address","Contact Number","Email Address","Number of Rooms","Bed Capacity (Normal)","Bed Capacity (Adjusted)","Pet Friendly","Function Hall / Conference Hall Capacity (Name: Capacity; ...)","Male Employees","Female Employees",
   "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
   "Accreditation Status (Computed)","Level of Accreditation","Accreditation Number","Accreditation Validity",
   "Accreditation History (Type|Number|AccredDate|Validity; ...)","Accredited Years (Computed)",
@@ -313,6 +314,27 @@ function totalEmployees(d){
   return (Number(d.maleEmployees)||0) + (Number(d.femaleEmployees)||0);
 }
 
+// Function / Conference halls: a list of {name, capacity}. Stored as text in Excel as "Name: Capacity; Name: Capacity".
+function getHalls(d){ return Array.isArray(d && d.functionHalls) ? d.functionHalls : []; }
+function nextHallName(list){ return "Function Hall " + ((list||[]).length + 1); }
+function normalizeHalls(list){
+  return (Array.isArray(list) ? list : [])
+    .map(h => ({ name: String(h && h.name || "").trim(), capacity: String(h && h.capacity || "").trim() }))
+    .filter(h => h.capacity !== "")
+    .map((h,i) => ({ name: h.name || ("Function Hall " + (i+1)), capacity: h.capacity }));
+}
+function hallsToText(list){
+  return (Array.isArray(list) ? list : []).filter(h => h && (h.name || h.capacity)).map(h => (h.name||"") + ": " + (h.capacity||"")).join("; ");
+}
+function parseHallsText(text){
+  return String(text||"").split(";").map(p => p.trim()).filter(Boolean).map((p,i) => {
+    const idx = p.lastIndexOf(":");
+    const name = idx > -1 ? p.slice(0, idx).trim() : "";
+    const capacity = (idx > -1 ? p.slice(idx+1) : p).trim();
+    return { name: name || ("Function Hall " + (i+1)), capacity };
+  }).filter(h => h.capacity !== "");
+}
+
 function yearOfISO(iso){
   const m = String(iso||"").match(/^(\d{4})/);
   return m ? parseInt(m[1],10) : null;
@@ -324,6 +346,7 @@ function formatEstabFieldValue(key, val){
     if(list.length===0) return "None";
     return list.map(h=>accredEntryLabel(h)).join("; ");
   }
+  if(key==="functionHalls") return hallsToText(val) || "None";
   if(key==="accredValidity") return val ? formatDateDisplay(val) : "—";
   if(val===undefined || val===null || val==="") return "—";
   return String(val);
@@ -334,8 +357,8 @@ function diffEstablishment(before, after){
   const a = after || {};
   const changes = [];
   Object.keys(ESTAB_FIELD_LABELS).forEach(k=>{
-    const bv = k==="accredHistory" ? accredHistoryToText(b[k]) : String(b[k]==null?"":b[k]);
-    const av = k==="accredHistory" ? accredHistoryToText(a[k]) : String(a[k]==null?"":a[k]);
+    const bv = k==="accredHistory" ? accredHistoryToText(b[k]) : k==="functionHalls" ? hallsToText(b[k]) : String(b[k]==null?"":b[k]);
+    const av = k==="accredHistory" ? accredHistoryToText(a[k]) : k==="functionHalls" ? hallsToText(a[k]) : String(a[k]==null?"":a[k]);
     if(bv !== av){
       changes.push({ key:k, label: ESTAB_FIELD_LABELS[k], from: formatEstabFieldValue(k, b[k]), to: formatEstabFieldValue(k, a[k]) });
     }
@@ -947,7 +970,7 @@ function buildEstabRows(list){
     const latest = latestAccredEntry(d);
     return [
       i+1, d.name||"", d.proprietor||"", d.municipality||"", d.classification||"", d.type||"",
-      d.address||"", d.contact||"", d.email||"", d.rooms||"", d.bedCapacityNormal||"", d.bedCapacityAdjusted||"", d.petFriendly||"No", d.maleEmployees||"", d.femaleEmployees||"",
+      d.address||"", d.contact||"", d.email||"", d.rooms||"", d.bedCapacityNormal||"", d.bedCapacityAdjusted||"", d.petFriendly||"No", hallsToText(getHalls(d)), d.maleEmployees||"", d.femaleEmployees||"",
       totalEmployees(d), d.remarks||"", d.year||"", getAccredState(d), getAccredState(d),
       (latest && latest.type)||"", (latest && latest.number)||"", isoToDateObj(latest && latest.validity), accredHistoryToText(getAccredHistory(d)),
       establishmentAccreditedYears(d).join(", "),
@@ -1081,6 +1104,7 @@ function parseImportedWorkbook(wb){
       bedCapacityNormal: String(row["Bed Capacity (Normal)"]||"").trim(),
       bedCapacityAdjusted: String(row["Bed Capacity (Adjusted)"]||"").trim(),
       petFriendly: matchFromList(row["Pet Friendly"], PET_FRIENDLY_OPTIONS) === "Yes" ? "Yes" : "No",
+      functionHalls: parseHallsText(row["Function Hall / Conference Hall Capacity (Name: Capacity; ...)"]),
       maleEmployees: String(row["Male Employees"]||"").trim(),
       femaleEmployees: String(row["Female Employees"]||"").trim(), remarks: String(row["Remarks"]||"").trim(),
       accredStatus: ACCRED_STATUSES.includes(rawAccred) ? rawAccred : "Not Accredited",
@@ -1661,7 +1685,7 @@ function buildEnterprisesPrint(list, filters){
     total: list.length,
     headers: keep.map(i=>ESTAB_HEADERS[i]),
     rows: buildEstabRows(list).map(r=>keep.map(i=>printCell(r[i]))),
-    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,4,4,4,6,5,4,6],
+    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,8,4,4,4,6,5,4,6],
     dense: true,
   };
 }
@@ -1800,7 +1824,7 @@ function buildEnterpriseAccreditationPrint(d){
 
 const emptyEstablishment = {
   name: "", proprietor: "", email: "", municipality: "", classification: "",
-  type: "", address: "", contact: "", rooms: "", bedCapacityNormal: "", bedCapacityAdjusted: "", petFriendly: "No", maleEmployees: "",
+  type: "", address: "", contact: "", rooms: "", bedCapacityNormal: "", bedCapacityAdjusted: "", petFriendly: "No", functionHalls: [], maleEmployees: "",
   femaleEmployees: "", remarks: "",
   accredHistory: [], status: "Active", statusOthers: "", year: "",
   tourlista: "No"
@@ -1865,6 +1889,23 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
       return {...prev, accredHistory: next};
     });
   };
+  const addHall = () => {
+    setF(prev => ({...prev, functionHalls: [...getHalls(prev), {name: nextHallName(getHalls(prev)), capacity:""}]}));
+  };
+  const updateHall = (idx, key, value) => {
+    setF(prev => {
+      const next = getHalls(prev).slice();
+      next[idx] = {...next[idx], [key]: value};
+      return {...prev, functionHalls: next};
+    });
+  };
+  const removeHall = (idx) => {
+    setF(prev => {
+      const next = getHalls(prev).slice();
+      next.splice(idx,1);
+      return {...prev, functionHalls: next};
+    });
+  };
   const typeOptions = f.classification==="Primary Enterprises" ? PRIMARY_TYPES : f.classification==="Secondary Enterprises" ? SECONDARY_TYPES : [];
   const isTourGuide = f.type === "Tour Guides";
 
@@ -1891,7 +1932,7 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
       alert(accredProblem);
       return;
     }
-    const cleanedForm = applyTourGuideAutoFields({...f, accredHistory: normalizeAccredHistory(f.accredHistory)});
+    const cleanedForm = applyTourGuideAutoFields({...f, accredHistory: normalizeAccredHistory(f.accredHistory), functionHalls: normalizeHalls(f.functionHalls)});
     const dupes = findPossibleDuplicates(cleanedForm.name, existingData, cleanedForm.id);
     if(dupes.length){
       setF(cleanedForm);
@@ -1902,7 +1943,7 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
   };
   const confirmSaveAnyway = () => {
     setDupeWarning(null);
-    finalizeSave({...f, accredHistory: normalizeAccredHistory(f.accredHistory)});
+    finalizeSave({...f, accredHistory: normalizeAccredHistory(f.accredHistory), functionHalls: normalizeHalls(f.functionHalls)});
   };
 
   if(confirmSave){
@@ -2006,6 +2047,21 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
         </select>
       </Field>
       <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Function Hall / Conference Hall Capacity">
+          <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
+            Click "Add Function Hall" for each hall or conference room (Function Hall 1, Function Hall 2, ...). You may rename a hall. Rows without a capacity are not saved.
+          </div>
+          {getHalls(f).map((h,idx)=>(
+            <div key={idx} style={{display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:8, marginBottom:8, alignItems:"center"}}>
+              <input type="text" value={h.name||""} onChange={e=>updateHall(idx,"name",e.target.value)} placeholder={"Function Hall " + (idx+1)} />
+              <input type="text" value={h.capacity||""} onChange={e=>updateHall(idx,"capacity",e.target.value)} placeholder="Capacity (pax)" />
+              <button type="button" className="btn-ghost" onClick={()=>removeHall(idx)} title="Remove this hall"><Icon d={ICONS.trash} color="#A8442D" /></button>
+            </div>
+          ))}
+          <button type="button" className="btn btn-outline-teal btn-sm" onClick={addHall}><Icon d={ICONS.plus} size={13} color="#1C6B6E" /> Add Function Hall</button>
+        </Field>
+      </div>
+      <div style={{gridColumn:"1 / -1"}}>
         <Field label="Accreditation">
           <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
             Leave blank if the enterprise is not accredited. Add one period for every accreditation. Enter at least one date. DOT List As Of = date of the DOT file where the enterprise first appeared. An accreditation is counted from its Date Accredited (or, if blank, its DOT List As Of date) up to its Valid Until month; with no Valid Until, it is counted only in the year of that date.
@@ -2070,6 +2126,7 @@ function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Bed Capacity (Normal)" value={item.bedCapacityNormal} />
       <ViewField label="Bed Capacity (Adjusted)" value={item.bedCapacityAdjusted} />
       <ViewField label="Pet Friendly?" value={item.petFriendly||"No"} />
+      <ViewField label="Function Hall / Conference Hall Capacity" value={hallsToText(getHalls(item)) || "—"} />
       <ViewField label="Male Employees" value={item.maleEmployees} />
       <ViewField label="Female Employees" value={item.femaleEmployees} />
       <ViewField label="Total Employees" value={totalEmployees(item)} />
@@ -2234,13 +2291,13 @@ function EstablishmentsSection({data, setData, isAdmin}){
         ]} />
         <div className="table-wrap">
           <table>
-            <thead><tr>{["Enterprise","Municipality","Rooms","Bed Cap. (Normal)","Bed Cap. (Adjusted)","Male","Female","Total Employees","Type","TourLISTA","Pet Friendly","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Enterprise","Municipality","Rooms","Bed Cap. (Normal)","Bed Cap. (Adjusted)","Function / Conference Halls","Male","Female","Total Employees","Type","TourLISTA","Pet Friendly","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
             <tbody>
               {filtered.map((d,i)=>{
                 return (
                 <tr key={d.id} className={i%2?"odd":""}>
                   <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
-                  <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.bedCapacityNormal}</td><td>{d.bedCapacityAdjusted}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td>
+                  <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.bedCapacityNormal}</td><td>{d.bedCapacityAdjusted}</td><td>{getHalls(d).map((h,i)=><div key={i} className="cell-sub">{h.name}: {h.capacity}</div>)}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td>
                   <td>{totalEmployees(d)}</td>
                   <td>{d.type}</td>
                   <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
@@ -2264,7 +2321,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
                 </tr>
                 );
               })}
-              {filtered.length===0 && <tr><td colSpan="13" className="empty-row">No establishments match these filters.</td></tr>}
+              {filtered.length===0 && <tr><td colSpan="14" className="empty-row">No establishments match these filters.</td></tr>}
             </tbody>
           </table>
         </div>
