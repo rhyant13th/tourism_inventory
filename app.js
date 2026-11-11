@@ -122,6 +122,7 @@ const ACCRED_LEVELS = [...PRIMARY_ACCRED_LEVELS, ...SECONDARY_ACCRED_LEVELS];
 const ESTAB_STATUSES = ["Active","Not Active","Others"];
 const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
 const TOURLISTA_OPTIONS = ["Yes","No"];
+const PET_FRIENDLY_OPTIONS = ["Yes","No"];
 const PHYSICAL_CONDITIONS = ["Lost/Destroyed","Critical","Poor","Fair","Good","Excellent"];
 const DECLARATION_STATUSES = ["Nationally Declared","Locally Declared","Registered","Unregistered/For Validation"];
 
@@ -135,6 +136,9 @@ const ESTAB_FIELD_LABELS = {
   contact: "Contact Number",
   email: "Email Address",
   rooms: "Number of Rooms",
+  bedCapacityNormal: "Bed Capacity (Normal)",
+  bedCapacityAdjusted: "Bed Capacity (Adjusted)",
+  petFriendly: "Pet Friendly",
   maleEmployees: "Male Employees",
   femaleEmployees: "Female Employees",
   remarks: "Remarks",
@@ -229,7 +233,7 @@ Object.entries(ATTRACTION_CATEGORIES).forEach(([cat, items]) => {
 
 const ESTAB_HEADERS = [
   "No.","Name of Enterprise","Proprietor / Owner","Municipality","Classification","Type",
-  "Address","Contact Number","Email Address","Number of Rooms","Male Employees","Female Employees",
+  "Address","Contact Number","Email Address","Number of Rooms","Bed Capacity (Normal)","Bed Capacity (Adjusted)","Pet Friendly","Male Employees","Female Employees",
   "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
   "Accreditation Status (Computed)","Level of Accreditation","Accreditation Number","Accreditation Validity",
   "Accreditation History (Type|Number|AccredDate|Validity; ...)","Accredited Years (Computed)",
@@ -943,7 +947,7 @@ function buildEstabRows(list){
     const latest = latestAccredEntry(d);
     return [
       i+1, d.name||"", d.proprietor||"", d.municipality||"", d.classification||"", d.type||"",
-      d.address||"", d.contact||"", d.email||"", d.rooms||"", d.maleEmployees||"", d.femaleEmployees||"",
+      d.address||"", d.contact||"", d.email||"", d.rooms||"", d.bedCapacityNormal||"", d.bedCapacityAdjusted||"", d.petFriendly||"No", d.maleEmployees||"", d.femaleEmployees||"",
       totalEmployees(d), d.remarks||"", d.year||"", getAccredState(d), getAccredState(d),
       (latest && latest.type)||"", (latest && latest.number)||"", isoToDateObj(latest && latest.validity), accredHistoryToText(getAccredHistory(d)),
       establishmentAccreditedYears(d).join(", "),
@@ -1073,7 +1077,11 @@ function parseImportedWorkbook(wb){
       name, proprietor: String(row["Proprietor / Owner"]||"").trim(),
       email: String(row["Email Address"]||"").trim(), municipality, classification, type,
       address: String(row["Address"]||"").trim(), contact: String(row["Contact Number"]||"").trim(),
-      rooms: String(row["Number of Rooms"]||"").trim(), maleEmployees: String(row["Male Employees"]||"").trim(),
+      rooms: String(row["Number of Rooms"]||"").trim(),
+      bedCapacityNormal: String(row["Bed Capacity (Normal)"]||"").trim(),
+      bedCapacityAdjusted: String(row["Bed Capacity (Adjusted)"]||"").trim(),
+      petFriendly: matchFromList(row["Pet Friendly"], PET_FRIENDLY_OPTIONS) === "Yes" ? "Yes" : "No",
+      maleEmployees: String(row["Male Employees"]||"").trim(),
       femaleEmployees: String(row["Female Employees"]||"").trim(), remarks: String(row["Remarks"]||"").trim(),
       accredStatus: ACCRED_STATUSES.includes(rawAccred) ? rawAccred : "Not Accredited",
       accredType,
@@ -1620,7 +1628,7 @@ function printFilterSummary(fields, filters){
 
 const ENTERPRISE_PRINT_FILTERS = [
   {key:"name", label:"Enterprise"}, {key:"municipality", label:"Municipality"}, {key:"classification", label:"Classification"},
-  {key:"type", label:"Type"}, {key:"status", label:"Status"}, {key:"tourlista", label:"TourLISTA"}, {key:"year", label:"Year"},
+  {key:"type", label:"Type"}, {key:"status", label:"Status"}, {key:"tourlista", label:"TourLISTA"}, {key:"petFriendly", label:"Pet Friendly"}, {key:"year", label:"Year"},
 ];
 
 const ACCRED_PRINT_FILTERS = [
@@ -1653,7 +1661,7 @@ function buildEnterprisesPrint(list, filters){
     total: list.length,
     headers: keep.map(i=>ESTAB_HEADERS[i]),
     rows: buildEstabRows(list).map(r=>keep.map(i=>printCell(r[i]))),
-    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,6,5,4,6],
+    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,4,4,4,6,5,4,6],
     dense: true,
   };
 }
@@ -1792,7 +1800,7 @@ function buildEnterpriseAccreditationPrint(d){
 
 const emptyEstablishment = {
   name: "", proprietor: "", email: "", municipality: "", classification: "",
-  type: "", address: "", contact: "", rooms: "", maleEmployees: "",
+  type: "", address: "", contact: "", rooms: "", bedCapacityNormal: "", bedCapacityAdjusted: "", petFriendly: "No", maleEmployees: "",
   femaleEmployees: "", remarks: "",
   accredHistory: [], status: "Active", statusOthers: "", year: "",
   tourlista: "No"
@@ -1802,7 +1810,7 @@ const emptyEstablishment = {
 // fields are auto-filled with "N/A" and locked whenever the enterprise type is Tour Guides.
 function applyTourGuideAutoFields(obj){
   if(obj && obj.type === "Tour Guides"){
-    return {...obj, proprietor: "N/A", rooms: "N/A", maleEmployees: "N/A", femaleEmployees: "N/A"};
+    return {...obj, proprietor: "N/A", rooms: "N/A", bedCapacityNormal: "N/A", bedCapacityAdjusted: "N/A", maleEmployees: "N/A", femaleEmployees: "N/A"};
   }
   return obj;
 }
@@ -1834,7 +1842,7 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
       if(k==="status" && v!=="Others") next.statusOthers = "";
       if(k==="type" && prev.type==="Tour Guides" && v!=="Tour Guides"){
         // leaving Tour Guides — clear the auto-filled N/A so the fields are editable again
-        ["proprietor","rooms","maleEmployees","femaleEmployees"].forEach(key=>{ if(next[key]==="N/A") next[key]=""; });
+        ["proprietor","rooms","bedCapacityNormal","bedCapacityAdjusted","maleEmployees","femaleEmployees"].forEach(key=>{ if(next[key]==="N/A") next[key]=""; });
       }
       return applyTourGuideAutoFields(next);
     });
@@ -1973,6 +1981,13 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
         <input type="email" value={f.email} onChange={set("email")} placeholder="example@email.com" />
       </Field>
       <Field label="Number of Rooms"><input type="text" value={f.rooms} onChange={set("rooms")} placeholder="0" disabled={isTourGuide} /></Field>
+      <Field label="Bed Capacity (Normal)"><input type="text" value={f.bedCapacityNormal||""} onChange={set("bedCapacityNormal")} placeholder="0" disabled={isTourGuide} /></Field>
+      <Field label="Bed Capacity (Adjusted)"><input type="text" value={f.bedCapacityAdjusted||""} onChange={set("bedCapacityAdjusted")} placeholder="0" disabled={isTourGuide} /></Field>
+      <Field label="Pet Friendly?">
+        <select value={f.petFriendly||"No"} onChange={set("petFriendly")}>
+          {PET_FRIENDLY_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
+        </select>
+      </Field>
       <Field label="Male Employees"><input type="text" value={f.maleEmployees} onChange={set("maleEmployees")} placeholder="0" disabled={isTourGuide} /></Field>
       <Field label="Female Employees"><input type="text" value={f.femaleEmployees} onChange={set("femaleEmployees")} placeholder="0" disabled={isTourGuide} /></Field>
       <Field label="Remarks"><input type="text" value={f.remarks} onChange={set("remarks")} placeholder="Optional remarks" /></Field>
@@ -2052,6 +2067,9 @@ function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Contact Number" value={item.contact} />
       <ViewField label="Email Address" value={item.email} />
       <ViewField label="Number of Rooms" value={item.rooms} />
+      <ViewField label="Bed Capacity (Normal)" value={item.bedCapacityNormal} />
+      <ViewField label="Bed Capacity (Adjusted)" value={item.bedCapacityAdjusted} />
+      <ViewField label="Pet Friendly?" value={item.petFriendly||"No"} />
       <ViewField label="Male Employees" value={item.maleEmployees} />
       <ViewField label="Female Employees" value={item.femaleEmployees} />
       <ViewField label="Total Employees" value={totalEmployees(item)} />
@@ -2097,6 +2115,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
     type: [...new Set(data.map(d=>d.type))].sort(),
     classification: CLASSIFICATIONS,
     tourlista: TOURLISTA_OPTIONS,
+    petFriendly: PET_FRIENDLY_OPTIONS,
     status: ESTAB_STATUSES,
     year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
   }), [data]);
@@ -2108,6 +2127,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
     if(!matchSel(filters.type, d.type)) return false;
     if(!matchSel(filters.status, d.status)) return false;
     if(!matchSel(filters.tourlista, d.tourlista||"No")) return false;
+    if(!matchSel(filters.petFriendly, d.petFriendly||"No")) return false;
     if(!matchSel(filters.year, d.year)) return false;
     return true;
   }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
@@ -2209,20 +2229,22 @@ function EstablishmentsSection({data, setData, isAdmin}){
           {key:"type", label:"Type"},
           {key:"status", label:"Status"},
           {key:"tourlista", label:"TourLISTA"},
+          {key:"petFriendly", label:"Pet Friendly"},
           {key:"year", label:"Year"},
         ]} />
         <div className="table-wrap">
           <table>
-            <thead><tr>{["Enterprise","Municipality","Rooms","Male","Female","Total Employees","Type","TourLISTA","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Enterprise","Municipality","Rooms","Bed Cap. (Normal)","Bed Cap. (Adjusted)","Male","Female","Total Employees","Type","TourLISTA","Pet Friendly","Status","Actions"].map(h=><th key={h}>{h}</th>)}</tr></thead>
             <tbody>
               {filtered.map((d,i)=>{
                 return (
                 <tr key={d.id} className={i%2?"odd":""}>
                   <td><div style={{fontWeight:600}}>{d.name}</div><div className="cell-sub">{d.address}</div></td>
-                  <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td>
+                  <td>{d.municipality}</td><td>{d.rooms}</td><td>{d.bedCapacityNormal}</td><td>{d.bedCapacityAdjusted}</td><td>{d.maleEmployees}</td><td>{d.femaleEmployees}</td>
                   <td>{totalEmployees(d)}</td>
                   <td>{d.type}</td>
                   <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
+                  <td><Pill tone={d.petFriendly==="Yes"?"teal":"gold"}>{d.petFriendly==="Yes"?"Yes":"No"}</Pill></td>
                   <td><Pill tone={d.status==="Active"?"teal":d.status==="Not Active"?"danger":"gold"}>{d.status==="Others" && d.statusOthers ? d.statusOthers : d.status}</Pill></td>
                   <td>
                     <div className="actions-cell">
@@ -2242,7 +2264,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
                 </tr>
                 );
               })}
-              {filtered.length===0 && <tr><td colSpan="10" className="empty-row">No establishments match these filters.</td></tr>}
+              {filtered.length===0 && <tr><td colSpan="13" className="empty-row">No establishments match these filters.</td></tr>}
             </tbody>
           </table>
         </div>
