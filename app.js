@@ -4453,12 +4453,17 @@ function AccreditationSection({data, setData, isAdmin}){
 
 // "Noted by" name and position are typed in a small box before printing (remembered on this computer).
 const NOTED_BY_KEY = "tourism-inventory-noted-by";
+const PREPARED_BY_DEFAULT = { name: "RYAN R. TAJONERA", position: "Tourism Operations Officer II" };
 function loadNotedBy(){
   try{
     const v = JSON.parse(localStorage.getItem(NOTED_BY_KEY) || "null");
-    if(v && typeof v === "object") return { name: String(v.name||""), position: String(v.position||"") };
+    if(v && typeof v === "object") return {
+      preparedName: v.preparedName != null ? String(v.preparedName) : PREPARED_BY_DEFAULT.name,
+      preparedPosition: v.preparedPosition != null ? String(v.preparedPosition) : PREPARED_BY_DEFAULT.position,
+      name: String(v.name||""), position: String(v.position||"")
+    };
   }catch(e){}
-  return { name: "", position: "" };
+  return { preparedName: PREPARED_BY_DEFAULT.name, preparedPosition: PREPARED_BY_DEFAULT.position, name: "", position: "" };
 }
 function saveNotedBy(v){ try{ localStorage.setItem(NOTED_BY_KEY, JSON.stringify(v)); }catch(e){} }
 
@@ -4481,7 +4486,7 @@ function NotedByDialog({ onConfirm, onCancel, columns }){
   const toggle = (i) => setSel(p => p.includes(i) ? p.filter(x=>x!==i) : [...p, i].sort((a,b)=>a-b));
   const go = () => {
     if(columns && sel.length === 0){ alert("Please tick at least one column to print."); return; }
-    const c = { name: v.name.trim(), position: v.position.trim() };
+    const c = { preparedName: v.preparedName.trim(), preparedPosition: v.preparedPosition.trim(), name: v.name.trim(), position: v.position.trim() };
     saveNotedBy(c);
     if(columns){ try{ localStorage.setItem(colKey, JSON.stringify(sel)); }catch(e){} }
     onConfirm(c, columns ? sel : null);
@@ -4508,10 +4513,12 @@ function NotedByDialog({ onConfirm, onCancel, columns }){
         </div>
       )}
       <div className="form-grid">
-        <Field label="Noted by — Name"><input type="text" autoFocus={!columns} value={v.name} onKeyDown={onKey} onChange={e=>setV({...v, name:e.target.value})} placeholder="Full name" /></Field>
+        <Field label="Prepared by — Name"><input type="text" autoFocus={!columns} value={v.preparedName} onKeyDown={onKey} onChange={e=>setV({...v, preparedName:e.target.value})} placeholder="Full name" /></Field>
+        <Field label="Prepared by — Position"><input type="text" value={v.preparedPosition} onKeyDown={onKey} onChange={e=>setV({...v, preparedPosition:e.target.value})} placeholder="e.g. Tourism Operations Officer II" /></Field>
+        <Field label="Noted by — Name"><input type="text" value={v.name} onKeyDown={onKey} onChange={e=>setV({...v, name:e.target.value})} placeholder="Full name" /></Field>
         <Field label="Noted by — Position"><input type="text" value={v.position} onKeyDown={onKey} onChange={e=>setV({...v, position:e.target.value})} placeholder="e.g. Provincial Tourism Officer" /></Field>
       </div>
-      <div style={{fontSize:11, color:"var(--subtext)", marginTop:8}}>Leave the name blank to print an empty signature line.</div>
+      <div style={{fontSize:11, color:"var(--subtext)", marginTop:8}}>Leave a name blank to print an empty signature line.</div>
       <div className="form-actions">
         <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn btn-primary" onClick={go}>Print</button>
@@ -4523,13 +4530,16 @@ function NotedByDialog({ onConfirm, onCancel, columns }){
 // Prepared by / Noted by block printed at the end of every report.
 function PrintSignatories({ notedBy }){
   const nb = notedBy || { name: "", position: "" };
+  const pb = notedBy && notedBy.preparedName != null
+    ? { name: notedBy.preparedName, position: notedBy.preparedPosition || "" }
+    : PREPARED_BY_DEFAULT;
   return (
     <div className="print-signatories">
       <div className="sig-block">
         <div className="sig-label">Prepared by:</div>
         <div className="sig-gap" />
-        <div>RYAN R. TAJONERA</div>
-        <div>Tourism Operations Officer II</div>
+        {pb.name ? <div>{pb.name}</div> : <div className="sig-line" />}
+        {pb.position ? <div>{pb.position}</div> : null}
       </div>
       <div className="sig-block">
         <div className="sig-label">Noted by:</div>
