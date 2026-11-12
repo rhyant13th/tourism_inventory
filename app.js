@@ -4809,13 +4809,37 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     matchSel(filters.type, d.type) &&
     matchSel(filters.estatus, d.status) &&
     matchSel(filters.municipality, d.municipality));
+  // Accreditation Year / Month filter (same rules as the Accreditation screen):
+  //   Accredited = has an accreditation covering that year (or that month)
+  //   Expired    = has an accreditation whose Valid Until falls in that year (or month) and has already passed
+  //   Not Accredited = neither of the above
+  const accYear = filters.year || "", accMonth = filters.month || "";
+  const accFlags = d => {
+    let acc = false, exp = false;
+    getAccredHistory(d).forEach(h=>{
+      if(accMonth ? accredEntryCoversMonth(h, accYear, accMonth) : accredEntryCoverageYears(h).includes(String(accYear))) acc = true;
+      if(isoInPeriod(h.validity, accYear, accMonth) && accredPeriodExpired(h)) exp = true;
+    });
+    return { acc, exp };
+  };
   const estabCounts = list => {
-    const st = list.map(getAccredState);
+    let nAcc, nExp, nNot;
+    if(accYear){
+      const fl = list.map(accFlags);
+      nAcc = fl.filter(x=>x.acc).length;
+      nExp = fl.filter(x=>x.exp).length;
+      nNot = fl.filter(x=>!x.acc && !x.exp).length;
+    } else {
+      const st = list.map(getAccredState);
+      nAcc = st.filter(s=>s==="Accredited").length;
+      nExp = st.filter(s=>s==="Expired").length;
+      nNot = st.filter(s=>s==="Not Accredited").length;
+    }
     return [
       list.length,
-      st.filter(s=>s==="Accredited").length,
-      st.filter(s=>s==="Expired").length,
-      st.filter(s=>s==="Not Accredited").length,
+      nAcc,
+      nExp,
+      nNot,
       list.filter(d=>d.status==="Active").length,
       list.filter(d=>d.status==="Not Active").length,
       list.filter(d=>d.status==="Others").length,
@@ -4891,7 +4915,20 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     municipality: munis, category: CATS, selection: ATTRACTION_SELECTIONS,
   };
   const FILTER_LABELS = {classification:"Classification", type:"Type", estatus:"Enterprise Status", municipality:"Municipality", category:"Category", selection:"Status"};
-  const filterText = fields.filter(f=>filterSel(filters[f.key]).length).map(f=>FILTER_LABELS[f.key]+": "+filterSel(filters[f.key]).join(", ")).join("  |  ") || "None (all records)";
+  const isEstabReport = report==="estab-muni" || report==="estab-type";
+  const accYearOptions = (() => {
+    const ys = new Set([String(new Date().getFullYear())]);
+    establishments.forEach(d => getAccredHistory(d).forEach(h => {
+      accredEntryCoverageYears(h).forEach(y => ys.add(String(y)));
+      const vy = yearOfISO(h.validity); if(vy!==null) ys.add(String(vy));
+    }));
+    return [...ys].sort((a,b)=>b-a);
+  })();
+  const accPeriodText = (isEstabReport && accYear) ? ("Accreditation Year: " + accYear + (accMonth ? "  |  Month: " + CALENDAR_MONTHS[Number(accMonth)-1] : "  |  Whole year")) : "";
+  const filterText = [accPeriodText, ...fields.filter(f=>filterSel(filters[f.key]).length).map(f=>FILTER_LABELS[f.key]+": "+filterSel(filters[f.key]).join(", "))].filter(Boolean).join("  |  ") || "None (all records)";
+  const yearNote = (isEstabReport && accYear)
+    ? (" Accreditation columns are for " + (accMonth ? CALENDAR_MONTHS[Number(accMonth)-1] + " " : "") + accYear + ": Accredited = accreditation in force in that period; Expired = accreditation whose Valid Until fell in that period and has lapsed; Not Accredited = neither.")
+    : "";
   const generated = now.toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"});
   const fmt = c => typeof c==="number" ? c.toLocaleString() : c;
   const numCls = j => (j>=numStart ? " ar-r" : "") + (j===numStart ? " ar-key" : "");
@@ -4929,6 +4966,20 @@ function AnalyticsSection({establishments, attractions, cbtos}){
         <p className="ar-sub">{cur.desc}</p>
       </div>
       <div className="ar-controls">
+        {isEstabReport && (<>
+          <select className="ar-select" value={accYear} title="Accreditation year"
+            onChange={e=>setFilters(prev=>({...prev, year:e.target.value, month: e.target.value ? prev.month : ""}))}>
+            <option value="">Accreditation: Current status</option>
+            {accYearOptions.map(y=><option key={y} value={y}>Accreditation Year: {y}</option>)}
+          </select>
+          {accYear && (
+            <select className="ar-select" value={accMonth} title="Month"
+              onChange={e=>setFilters(prev=>({...prev, month:e.target.value}))}>
+              <option value="">Whole year</option>
+              {CALENDAR_MONTHS.map((m,i)=><option key={m} value={String(i+1)}>{m}</option>)}
+            </select>
+          )}
+        </>)}
         {fields.map(f=>(
           <div key={f.key} style={{minWidth:170}}>
             <MultiSelectFilter options={options[f.key]||[]} value={filterSel(filters[f.key])} allLabel={f.all}
@@ -4962,7 +5013,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
           </tfoot>
         </table>
       </div>
-      <p className="ar-foot-note">Note: {cur.note}</p>
+      <p className="ar-foot-note">Note: {cur.note}{yearNote}</p>
     </div>
 
     {chartData.length>0 && (
