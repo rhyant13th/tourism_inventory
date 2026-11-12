@@ -4469,8 +4469,10 @@ function saveNotedBy(v){ try{ localStorage.setItem(NOTED_BY_KEY, JSON.stringify(
 
 // Print options box: choose which columns to print (when `columns` is given) and the Noted by name / position.
 // onConfirm(notedBy, selectedColumnIndexes | null)
-function NotedByDialog({ onConfirm, onCancel, columns }){
+const PRINT_CHART_KEY = "tourism-print-chart";
+function NotedByDialog({ onConfirm, onCancel, columns, chartOption }){
   const [v, setV] = useState(loadNotedBy);
+  const [incChart, setIncChart] = useState(() => { try{ return localStorage.getItem(PRINT_CHART_KEY) !== "0"; }catch(e){ return true; } });
   const colKey = columns ? "tourism-print-cols:" + columns.join("|") : "";
   const [sel, setSel] = useState(() => {
     if(!columns) return [];
@@ -4489,7 +4491,8 @@ function NotedByDialog({ onConfirm, onCancel, columns }){
     const c = { preparedName: v.preparedName.trim(), preparedPosition: v.preparedPosition.trim(), name: v.name.trim(), position: v.position.trim() };
     saveNotedBy(c);
     if(columns){ try{ localStorage.setItem(colKey, JSON.stringify(sel)); }catch(e){} }
-    onConfirm(c, columns ? sel : null);
+    if(chartOption){ try{ localStorage.setItem(PRINT_CHART_KEY, incChart ? "1" : "0"); }catch(e){} }
+    onConfirm(c, columns ? sel : null, { includeChart: chartOption ? incChart : true });
   };
   const onKey = (e) => { if(e.key === "Enter"){ e.preventDefault(); go(); } };
   return (
@@ -4511,6 +4514,12 @@ function NotedByDialog({ onConfirm, onCancel, columns }){
             ))}
           </div>
         </div>
+      )}
+      {chartOption && (
+        <label style={{display:"flex", gap:8, alignItems:"center", fontSize:13, cursor:"pointer", margin:"0 0 14px", fontWeight:600}}>
+          <input type="checkbox" style={{width:"auto"}} checked={incChart} onChange={e=>setIncChart(e.target.checked)} />
+          Include the Distribution graph in the printout
+        </label>
       )}
       <div className="form-grid">
         <Field label="Prepared by — Name"><input type="text" autoFocus={!columns} value={v.preparedName} onKeyDown={onKey} onChange={e=>setV({...v, preparedName:e.target.value})} placeholder="Full name" /></Field>
@@ -4783,6 +4792,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const [notedBy, setNotedBy] = useState(loadNotedBy);
   const [askNoted, setAskNoted] = useState(false);
   const [printCols, setPrintCols] = useState(null);   // column numbers kept while printing (null = all)
+  const [printChart, setPrintChart] = useState(null);   // false = leave the Distribution graph out of the printout (null = show)
 
   useEffect(()=>{
     const h = ()=>setNow(new Date());
@@ -4926,6 +4936,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   })();
   const accPeriodText = (isEstabReport && accYear) ? ("Accreditation Year: " + accYear + (accMonth ? "  |  Month: " + CALENDAR_MONTHS[Number(accMonth)-1] : "  |  Whole year")) : "";
   const filterText = [accPeriodText, ...fields.filter(f=>filterSel(filters[f.key]).length).map(f=>FILTER_LABELS[f.key]+": "+filterSel(filters[f.key]).join(", "))].filter(Boolean).join("  |  ") || "None (all records)";
+  const periodLabel = (isEstabReport && accYear) ? ("Accredited / Expired as of " + (accMonth ? CALENDAR_MONTHS[Number(accMonth)-1] + " " : "") + accYear) : "";
   const yearNote = (isEstabReport && accYear)
     ? (" Accreditation columns are for " + (accMonth ? CALENDAR_MONTHS[Number(accMonth)-1] + " " : "") + accYear + ": Accredited = accreditation in force in that period; Expired = accreditation whose Valid Until fell in that period and has lapsed; Not Accredited = neither.")
     : "";
@@ -4934,11 +4945,12 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const numCls = j => (j>=numStart ? " ar-r" : "") + (j===numStart ? " ar-key" : "");
 
   const handlePrint = () => setAskNoted(true);
-  const confirmNoted = (c, sel) => {
+  const confirmNoted = (c, sel, opts) => {
     setNotedBy(c); setAskNoted(false); setNow(new Date());
     setPrintCols(sel ? sel.map(i=>i+1) : null);      // the first (label) column is always printed
-    window.addEventListener("afterprint", ()=>setPrintCols(null), {once:true});
-    setTimeout(()=>window.print(), 150);
+    setPrintChart(opts && opts.includeChart === false ? false : null);
+    window.addEventListener("afterprint", ()=>{ setPrintCols(null); setPrintChart(null); }, {once:true});
+    setTimeout(()=>window.print(), 400);             // wait for the Prepared by / Noted by block to be drawn
   };
   const vis = cols.map((c,j)=>j).filter(j => j===0 || !printCols || printCols.includes(j));
 
@@ -4972,13 +4984,11 @@ function AnalyticsSection({establishments, attractions, cbtos}){
             <option value="">Accreditation: Current status</option>
             {accYearOptions.map(y=><option key={y} value={y}>Accreditation Year: {y}</option>)}
           </select>
-          {accYear && (
-            <select className="ar-select" value={accMonth} title="Month"
-              onChange={e=>setFilters(prev=>({...prev, month:e.target.value}))}>
-              <option value="">Whole year</option>
-              {CALENDAR_MONTHS.map((m,i)=><option key={m} value={String(i+1)}>{m}</option>)}
-            </select>
-          )}
+          <select className="ar-select" value={accMonth} title="Month (choose a year first)" disabled={!accYear}
+            onChange={e=>setFilters(prev=>({...prev, month:e.target.value}))}>
+            <option value="">{accYear ? "Month: Whole year" : "Month (pick a year first)"}</option>
+            {CALENDAR_MONTHS.map((m,i)=><option key={m} value={String(i+1)}>{m}</option>)}
+          </select>
         </>)}
         {fields.map(f=>(
           <div key={f.key} style={{minWidth:170}}>
@@ -4996,6 +5006,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     <div className="ar-card ar-print-card">
       <div className="ar-title-block">
         <h3 className="ar-h3">{title}</h3>
+        {periodLabel && <p className="ar-sub" style={{fontWeight:700, color:"#0f172a", fontSize:13}}>{periodLabel}</p>}
         <p className="ar-sub">Filters applied: <b>{filterText}</b></p>
       </div>
       <div className="ar-scroll">
@@ -5017,7 +5028,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     </div>
 
     {chartData.length>0 && (
-      <div className="ar-card ar-chart-card">
+      <div className={"ar-card ar-chart-card" + (printChart===false ? " ar-noprint" : "")}>
         <h3 className="ar-h3s">Distribution — {cols[numStart]}</h3>
         {chartData.map(d=>(
           <div className="ar-bar-row" key={d.name}>
@@ -5034,7 +5045,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
       <p style={{marginTop:4}}>Date generated: {generated}</p>
     </div>
     <PrintSignatories notedBy={notedBy} />
-    {askNoted && <NotedByDialog columns={cols.slice(1)} onConfirm={confirmNoted} onCancel={()=>setAskNoted(false)} />}
+    {askNoted && <NotedByDialog columns={cols.slice(1)} chartOption={chartData.length>0} onConfirm={confirmNoted} onCancel={()=>setAskNoted(false)} />}
   </div>);
 }
 
