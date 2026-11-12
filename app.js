@@ -2212,6 +2212,120 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
   </div>);
 }
 
+// ======================================================================
+// PRINTABLE INSPECTION FORM (same fields as the Add / Edit Enterprise form)
+// item = an enterprise record (prints it filled in) or null (prints a blank form)
+// ======================================================================
+function buildEstablishmentFormHTML(item){
+  const d = item || {};
+  const esc = v => String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const box = on => '<span class="cb">' + (on ? "X" : "&nbsp;") + '</span>';
+  const check = (label, on) => '<span class="opt">' + box(on) + esc(label) + '</span>';
+  const fld = (label, value, grow) => '<div class="f" style="flex:' + (grow||1) + '"><div class="fl">' + esc(label) + '</div><div class="fv">' + (value ? esc(value) : "&nbsp;") + '</div></div>';
+  const row = (...cells) => '<div class="row">' + cells.join("") + '</div>';
+  const sec = t => '<div class="sec">' + esc(t) + '</div>';
+  const listChecks = (opts, chosen) => '<div class="grid3">' + opts.map(o => check(o, (chosen||[]).includes(o))).join("") + '</div>';
+
+  const types = (list) => '<div class="grid3">' + list.map(t => check(t, d.type===t)).join("") + '</div>';
+  const emp = (Number(d.maleEmployees)||0) + (Number(d.femaleEmployees)||0);
+  const totalEmp = (d.maleEmployees==null && d.femaleEmployees==null) ? "" : (String(d.maleEmployees||"")==="N/A" ? "N/A" : (d.maleEmployees||d.femaleEmployees ? emp : ""));
+  const statusOn = s => d.status === s;
+
+  // Function halls: always at least 4 lines
+  const halls = getHalls(d).slice();
+  while(halls.length < 4) halls.push({name:"", capacity:""});
+  const hallRows = halls.map((h,i) => '<tr><td>' + esc(h.name || ("Function Hall " + (i+1))) + '</td><td>' + esc(h.capacity) + '</td></tr>').join("");
+
+  // Accreditation: always at least 3 lines
+  const hist = (item ? getAccredHistory(d) : []).slice();
+  while(hist.length < 3) hist.push({type:"", number:"", accredDate:"", validity:"", dotAsOf:""});
+  const histRows = hist.map(h => '<tr><td>' + esc(h.type) + '</td><td>' + esc(h.number) + '</td><td>' + esc(h.accredDate ? formatDateDisplay(h.accredDate) : "") + '</td><td>' + esc(h.validity ? formatDateDisplay(h.validity) : "") + '</td><td>' + esc(h.dotAsOf ? formatDateDisplay(h.dotAsOf) : "") + '</td></tr>').join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Enterprise Inspection Form${d.name ? " - " + esc(d.name) : ""}</title>
+<style>
+  @page { size: A4 portrait; margin: 10mm; }
+  *{ box-sizing:border-box; }
+  body{ font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color:#000; margin:0; }
+  .hd{ text-align:center; line-height:1.3; margin-bottom:6px; }
+  .hd .t1{ font-size:9pt; } .hd .t2{ font-size:13pt; font-weight:700; margin-top:2px; }
+  .sec{ background:#e5e7eb; border:1px solid #000; font-weight:700; padding:2px 6px; margin:8px 0 4px; font-size:9.5pt; text-transform:uppercase; }
+  .row{ display:flex; gap:10px; margin-bottom:3px; }
+  .f{ min-width:0; } .fl{ font-size:7.5pt; color:#333; } .fv{ border-bottom:1px solid #000; min-height:17px; padding:1px 2px; font-weight:600; }
+  .grid3{ display:grid; grid-template-columns:repeat(3, 1fr); gap:2px 8px; margin:2px 0 4px; }
+  .grid2{ display:grid; grid-template-columns:repeat(2, 1fr); gap:2px 8px; }
+  .opt{ display:flex; gap:5px; align-items:flex-start; font-size:8.5pt; }
+  .cb{ flex:none; display:inline-block; width:11px; height:11px; border:1px solid #000; text-align:center; line-height:10px; font-size:9pt; font-weight:700; margin-top:1px; }
+  .inl{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin:2px 0 4px; }
+  .lbl{ font-size:8.5pt; font-weight:700; margin-top:3px; }
+  table{ width:100%; border-collapse:collapse; margin:2px 0 4px; }
+  th, td{ border:1px solid #000; padding:2px 4px; font-size:8.5pt; height:19px; text-align:left; }
+  th{ background:#f3f4f6; }
+  .lines div{ border-bottom:1px solid #000; height:20px; }
+  .sig{ display:flex; gap:24px; margin-top:22px; }
+  .sig div{ flex:1; text-align:center; font-size:8.5pt; } .sig .ln{ border-top:1px solid #000; margin-top:26px; padding-top:2px; }
+  .sec, .row, table, .sig, .opt{ break-inside: avoid; }
+</style></head><body>
+<div class="hd">
+  <div class="t1">Province of Occidental Mindoro &mdash; Provincial Tourism, Culture and Arts Division</div>
+  <div class="t2">TOURISM ENTERPRISE INSPECTION FORM</div>
+</div>
+
+${sec("A. Enterprise Information")}
+${row(fld("Name of Enterprise", d.name, 2), fld("Municipality", d.municipality, 1))}
+${row(fld("Proprietor / Owner", d.proprietor, 2), fld("Contact Number", d.contact, 1))}
+${row(fld("Address (Street, Barangay)", d.address, 2), fld("Email Address", d.email, 1))}
+<div class="lbl">Municipality</div>
+<div class="inl">${MUNICIPALITIES.map(m => check(m, d.municipality===m)).join("")}</div>
+<div class="lbl">Classification</div>
+<div class="inl">${CLASSIFICATIONS.map(c => check(c, d.classification===c)).join("")}</div>
+<div class="lbl">Type &mdash; Primary Enterprises</div>
+${types(PRIMARY_TYPES)}
+<div class="lbl">Type &mdash; Secondary Enterprises</div>
+${types(SECONDARY_TYPES)}
+
+${sec("B. Capacity, Employees and Status")}
+${row(fld("Number of Rooms", d.rooms), fld("Bed Capacity (Normal)", d.bedCapacityNormal), fld("Bed Capacity (Adjusted)", d.bedCapacityAdjusted))}
+${row(fld("Male Employees", d.maleEmployees), fld("Female Employees", d.femaleEmployees), fld("Total Employees", item ? totalEmp : ""))}
+${row(fld("Year (Established / Registered)", d.year), fld("Date Updated", d.dateUpdated ? formatDateDisplay(d.dateUpdated) : ""), fld("Date of Inspection", ""))}
+<div class="inl"><b style="font-size:8.5pt">Pet Friendly?</b> ${check("Yes", item && d.petFriendly==="Yes")} ${check("No", item && d.petFriendly!=="Yes")}
+  &nbsp;&nbsp;<b style="font-size:8.5pt">Registered on TourLISTA?</b> ${check("Yes", item && d.tourlista==="Yes")} ${check("No", item && d.tourlista!=="Yes")}</div>
+<div class="inl"><b style="font-size:8.5pt">Status of Enterprise</b> ${check("Active", statusOn("Active"))} ${check("Not Active", statusOn("Not Active"))} ${check("Others: " + (d.status==="Others" ? (d.statusOthers||"") : "__________________"), statusOn("Others"))}</div>
+
+${sec("C. Function Hall / Conference Hall Capacity")}
+<table><thead><tr><th>Function / Conference Hall</th><th style="width:30%">Capacity (pax)</th></tr></thead><tbody>${hallRows}</tbody></table>
+
+${sec("D. Facilities")}
+${listChecks(FACILITY_OPTIONS, d.facilities)}
+${row(fld("Other facilities", d.facilitiesOthers))}
+
+${sec("E. Amenities")}
+${listChecks(AMENITY_OPTIONS, d.amenities)}
+${row(fld("Other amenities", d.amenitiesOthers))}
+
+${sec("F. Accreditation")}
+<table><thead><tr><th>Level of Accreditation</th><th>Accreditation Number</th><th>Date Accredited</th><th>Valid Until</th><th>DOT List As Of</th></tr></thead><tbody>${histRows}</tbody></table>
+
+${sec("G. Remarks / Inspection Findings")}
+${d.remarks ? '<div class="fv" style="min-height:0;margin-bottom:2px">Remarks on file: ' + esc(d.remarks) + '</div>' : ""}
+<div class="lines"><div></div><div></div><div></div><div></div></div>
+
+<div class="sig">
+  <div><div class="ln">Inspected by (Name and Signature)</div></div>
+  <div><div class="ln">Enterprise Representative (Name and Signature)</div></div>
+  <div><div class="ln">Date of Inspection</div></div>
+</div>
+</body></html>`;
+  return html;
+}
+
+function printEstablishmentForm(item){
+  const w = window.open("", "_blank");
+  if(!w){ alert("The form could not open. Please allow pop-ups for this page and try again."); return; }
+  w.document.open(); w.document.write(buildEstablishmentFormHTML(item || null)); w.document.close();
+  w.focus();
+  setTimeout(() => { try{ w.print(); }catch(e){} }, 400);
+}
+
 function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
   if(!item) return null;
   return (<div>
@@ -2259,6 +2373,7 @@ function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
 
     <div className="form-actions">
       <button className="btn" onClick={onClose}>Close</button>
+      <button className="btn btn-outline-teal" onClick={()=>printEstablishmentForm(item)}><PrintIcon /> Print Inspection Form</button>
       {isAdmin && (
         <button className="btn btn-primary" onClick={onEdit}><Icon d={ICONS.edit} size={13} color="#fff" /> Edit This Enterprise</button>
       )}
@@ -2359,6 +2474,9 @@ function EstablishmentsSection({data, setData, isAdmin}){
             <PrintIcon /> Print Report
           </button>
         )}
+        <button className="btn btn-outline-teal btn-sm" onClick={()=>printEstablishmentForm(null)} title="Print an empty inspection form (same fields as the Add Enterprise form)">
+          <PrintIcon /> Blank Inspection Form
+        </button>
         {isAdmin && (
           <button className="btn btn-primary" onClick={()=>{ setFormDirty(false); setModal({mode:"add"}); }}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Enterprise</button>
         )}
