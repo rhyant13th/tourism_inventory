@@ -4819,18 +4819,22 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     matchSel(filters.type, d.type) &&
     matchSel(filters.estatus, d.status) &&
     matchSel(filters.municipality, d.municipality));
-  // Accreditation Year / Month filter (same rules as the Accreditation screen):
-  //   Accredited = has an accreditation covering that year (or that month)
-  //   Expired    = has an accreditation whose Valid Until falls in that year (or month) and has already passed
-  //   Not Accredited = neither of the above
+  // Accreditation Year / Month filter. Every enterprise accredited in the chosen period is counted ONCE:
+  //   Expired    = its accreditation ended (Valid Until already passed) within the period, with no other accreditation still running
+  //   Accredited = accredited in the period and NOT expired in it
+  //   so Accredited + Expired = all enterprises accredited in that year (or month).
+  //   Not Accredited = no accreditation in that period.
   const accYear = filters.year || "", accMonth = filters.month || "";
   const accFlags = d => {
-    let acc = false, exp = false;
+    let covered = false, running = false;
     getAccredHistory(d).forEach(h=>{
-      if(accMonth ? accredEntryCoversMonth(h, accYear, accMonth) : accredEntryCoverageYears(h).includes(String(accYear))) acc = true;
-      if(isoInPeriod(h.validity, accYear, accMonth) && accredPeriodExpired(h)) exp = true;
+      const covers = accMonth ? accredEntryCoversMonth(h, accYear, accMonth) : accredEntryCoverageYears(h).includes(String(accYear));
+      if(!covers) return;
+      covered = true;
+      const endedInPeriod = isoInPeriod(h.validity, accYear, accMonth) && accredPeriodExpired(h);
+      if(!endedInPeriod) running = true;
     });
-    return { acc, exp };
+    return { acc: covered && running, exp: covered && !running, none: !covered };
   };
   const estabCounts = list => {
     let nAcc, nExp, nNot;
@@ -4838,7 +4842,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
       const fl = list.map(accFlags);
       nAcc = fl.filter(x=>x.acc).length;
       nExp = fl.filter(x=>x.exp).length;
-      nNot = fl.filter(x=>!x.acc && !x.exp).length;
+      nNot = fl.filter(x=>x.none).length;
     } else {
       const st = list.map(getAccredState);
       nAcc = st.filter(s=>s==="Accredited").length;
@@ -4938,7 +4942,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const filterText = [accPeriodText, ...fields.filter(f=>filterSel(filters[f.key]).length).map(f=>FILTER_LABELS[f.key]+": "+filterSel(filters[f.key]).join(", "))].filter(Boolean).join("  |  ") || "None (all records)";
   const periodLabel = (isEstabReport && accYear) ? ("Accredited / Expired as of " + (accMonth ? CALENDAR_MONTHS[Number(accMonth)-1] + " " : "") + accYear) : "";
   const yearNote = (isEstabReport && accYear)
-    ? (" Accreditation columns are for " + (accMonth ? CALENDAR_MONTHS[Number(accMonth)-1] + " " : "") + accYear + ": Accredited = accreditation in force in that period; Expired = accreditation whose Valid Until fell in that period and has lapsed; Not Accredited = neither.")
+    ? (" Accreditation columns are for " + (accMonth ? CALENDAR_MONTHS[Number(accMonth)-1] + " " : "") + accYear + ": Accredited = accredited in that period and not expired; Expired = accredited in that period but already expired; so Accredited + Expired = total accredited in that period. Not Accredited = no accreditation in that period.")
     : "";
   const generated = now.toLocaleString("en-PH", {year:"numeric", month:"long", day:"numeric", hour:"numeric", minute:"2-digit"});
   const fmt = c => typeof c==="number" ? c.toLocaleString() : c;
