@@ -775,39 +775,54 @@ function accredPeriodInScope(h, year, month){
                    : accredEntryCoverageYears(h).includes(String(year));
 }
 
+// Latest-ending accreditation among a list of entries (an entry with no Valid Until counts as never ending).
+function accredLatestEnding(entries){
+  let best = null;
+  entries.forEach(h=>{
+    if(!best) { best = h; return; }
+    const bv = best.validity || "9999-12-31", hv = h.validity || "9999-12-31";
+    if(hv > bv) best = h;
+  });
+  return best;
+}
+
 // Dashboard numbers for one year (each enterprise is counted once per card).
+// An enterprise is judged by its LATEST accreditation in that year: if it expired and then renewed, it is Valid, not Expired.
 function accredYearStats(list, year){
   const accredited = new Set(), valid = new Set(), renewed = new Set();
   const toExpire = new Set(), expired = new Set(), lapsed = new Set();
   const yearEnd = String(year) + "-12-31";
   list.forEach(d=>{
-    getAccredHistory(d).forEach(h=>{
-      const covers = accredEntryCoverageYears(h).includes(String(year));
-      if(covers) accredited.add(d.id);
-      if(covers && (!h.validity || h.validity >= yearEnd)) valid.add(d.id);
-      if(isoInPeriod(h.accredDate, year, "")) renewed.add(d.id);
-      if(isoInPeriod(h.validity, year, "")){
-        if(accredPeriodExpired(h)) expired.add(d.id); else toExpire.add(d.id);
+    const hist = getAccredHistory(d);
+    const covering = hist.filter(h => accredEntryCoverageYears(h).includes(String(year)));
+    if(covering.length){
+      accredited.add(d.id);
+      const latestCov = accredLatestEnding(covering);
+      if(!latestCov.validity || latestCov.validity >= yearEnd) valid.add(d.id);
+      if(latestCov.validity && isoInPeriod(latestCov.validity, year, "")){
+        if(accredPeriodExpired(latestCov)) expired.add(d.id); else toExpire.add(d.id);
       }
-    });
+    }
+    hist.forEach(h=>{ if(isoInPeriod(h.accredDate, year, "")) renewed.add(d.id); });
     const latest = latestAccredEntry(d);
     if(latest && accredPeriodExpired(latest) && isoInPeriod(latest.validity, year, "")) lapsed.add(d.id);
   });
   return { accredited, valid, renewed, toExpire, expired, lapsed };
 }
 
-// Month-by-month table for one year.
+// Month-by-month table for one year (same rule: judged by the latest accreditation covering that month).
 function accredMonthlyStats(list, year){
   return CALENDAR_MONTHS.map((name, i)=>{
     const m = i + 1;
     const acc = new Set(), toE = new Set(), exp = new Set();
     list.forEach(d=>{
-      getAccredHistory(d).forEach(h=>{
-        if(accredEntryCoversMonth(h, year, m)) acc.add(d.id);
-        if(isoInPeriod(h.validity, year, m)){
-          if(accredPeriodExpired(h)) exp.add(d.id); else toE.add(d.id);
-        }
-      });
+      const covering = getAccredHistory(d).filter(h => accredEntryCoversMonth(h, year, m));
+      if(!covering.length) return;
+      acc.add(d.id);
+      const latestCov = accredLatestEnding(covering);
+      if(latestCov.validity && isoInPeriod(latestCov.validity, year, m)){
+        if(accredPeriodExpired(latestCov)) exp.add(d.id); else toE.add(d.id);
+      }
     });
     return { month: name, num: m, accredited: acc.size, toExpire: toE.size, expired: exp.size };
   });
