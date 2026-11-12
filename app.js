@@ -123,6 +123,15 @@ const ESTAB_STATUSES = ["Active","Not Active","Others"];
 const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
 const TOURLISTA_OPTIONS = ["Yes","No"];
 const PET_FRIENDLY_OPTIONS = ["Yes","No"];
+// Amenities an establishment may offer (tick all that apply; anything else goes in "Other amenities").
+const AMENITY_OPTIONS = [
+  "Air-conditioned rooms", "Free Wi-Fi", "Swimming pool", "Restaurant / Cafe", "Bar / Lounge",
+  "Function / Conference hall", "Parking area", "Beachfront / Beach access", "Hot and cold shower",
+  "TV / Cable", "Laundry service", "Room service", "24-hour reception / front desk", "Backup generator",
+  "Shared kitchen / Kitchenette", "Cottages / Picnic huts", "Videoke / Entertainment", "Playground / Kids area",
+  "Gym / Fitness area", "Spa / Massage", "Airport / Port transfer", "Tour / Activity desk",
+  "Boat / Water sports rental", "Camping area", "PWD-accessible (ramp / facilities)", "CCTV / Security", "Souvenir shop",
+];
 const PHYSICAL_CONDITIONS = ["Lost/Destroyed","Critical","Poor","Fair","Good","Excellent"];
 const DECLARATION_STATUSES = ["Nationally Declared","Locally Declared","Registered","Unregistered/For Validation"];
 
@@ -139,6 +148,8 @@ const ESTAB_FIELD_LABELS = {
   bedCapacityNormal: "Bed Capacity (Normal)",
   bedCapacityAdjusted: "Bed Capacity (Adjusted)",
   petFriendly: "Pet Friendly",
+  amenities: "Amenities",
+  amenitiesOthers: "Other Amenities",
   functionHalls: "Function Hall / Conference Hall Capacity",
   maleEmployees: "Male Employees",
   femaleEmployees: "Female Employees",
@@ -238,7 +249,7 @@ const ESTAB_HEADERS = [
   "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
   "Accreditation Status (Computed)","Level of Accreditation","Accreditation Number","Accreditation Validity",
   "Accreditation History (Type|Number|AccredDate|Validity; ...)","Accredited Years (Computed)",
-  "Registered on TourLISTA","Status of Enterprise","Date Updated",
+  "Registered on TourLISTA","Status of Enterprise","Date Updated","Amenities (separated by ;)","Other Amenities",
 ];
 
 const ATTR_HEADERS = [
@@ -347,6 +358,7 @@ function formatEstabFieldValue(key, val){
     return list.map(h=>accredEntryLabel(h)).join("; ");
   }
   if(key==="functionHalls") return hallsToText(val) || "None";
+  if(key==="amenities") return (Array.isArray(val) && val.length) ? val.join(", ") : "None";
   if(key==="accredValidity") return val ? formatDateDisplay(val) : "—";
   if(val===undefined || val===null || val==="") return "—";
   return String(val);
@@ -357,8 +369,8 @@ function diffEstablishment(before, after){
   const a = after || {};
   const changes = [];
   Object.keys(ESTAB_FIELD_LABELS).forEach(k=>{
-    const bv = k==="accredHistory" ? accredHistoryToText(b[k]) : k==="functionHalls" ? hallsToText(b[k]) : String(b[k]==null?"":b[k]);
-    const av = k==="accredHistory" ? accredHistoryToText(a[k]) : k==="functionHalls" ? hallsToText(a[k]) : String(a[k]==null?"":a[k]);
+    const bv = k==="accredHistory" ? accredHistoryToText(b[k]) : k==="functionHalls" ? hallsToText(b[k]) : k==="amenities" ? (Array.isArray(b[k]) ? b[k].join("; ") : "") : String(b[k]==null?"":b[k]);
+    const av = k==="accredHistory" ? accredHistoryToText(a[k]) : k==="functionHalls" ? hallsToText(a[k]) : k==="amenities" ? (Array.isArray(a[k]) ? a[k].join("; ") : "") : String(a[k]==null?"":a[k]);
     if(bv !== av){
       changes.push({ key:k, label: ESTAB_FIELD_LABELS[k], from: formatEstabFieldValue(k, b[k]), to: formatEstabFieldValue(k, a[k]) });
     }
@@ -977,6 +989,7 @@ function buildEstabRows(list){
       d.tourlista||"No",
       (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
       isoToDateObj(d.dateUpdated),
+      (Array.isArray(d.amenities) ? d.amenities.join("; ") : ""), d.amenitiesOthers||"",
     ];
   });
 }
@@ -1117,6 +1130,15 @@ function parseImportedWorkbook(wb){
       year: String(row["Year Established / Registered"]||"").trim(),
       tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
       dateUpdated: excelValueToISODate(row["Date Updated"]) || "",
+      ...(() => {
+        const amenities = [], extra = [];
+        String(row["Amenities (separated by ;)"]||"").split(";").map(x=>x.trim()).filter(Boolean).forEach(t=>{
+          const hit = AMENITY_OPTIONS.find(o => o.toLowerCase() === t.toLowerCase());
+          if(hit){ if(!amenities.includes(hit)) amenities.push(hit); } else extra.push(t);
+        });
+        const other = [String(row["Other Amenities"]||"").trim(), ...extra].filter(Boolean).join("; ");
+        return { amenities, amenitiesOthers: other };
+      })(),
     });
   });
 
@@ -1654,7 +1676,7 @@ function printFilterSummary(fields, filters){
 
 const ENTERPRISE_PRINT_FILTERS = [
   {key:"name", label:"Enterprise"}, {key:"municipality", label:"Municipality"}, {key:"classification", label:"Classification"},
-  {key:"type", label:"Type"}, {key:"status", label:"Status"}, {key:"tourlista", label:"TourLISTA"}, {key:"petFriendly", label:"Pet Friendly"}, {key:"year", label:"Year"},
+  {key:"type", label:"Type"}, {key:"status", label:"Status"}, {key:"tourlista", label:"TourLISTA"}, {key:"petFriendly", label:"Pet Friendly"}, {key:"amenities", label:"Amenities (has all)"}, {key:"year", label:"Year"},
 ];
 
 const ACCRED_PRINT_FILTERS = [
@@ -1687,7 +1709,7 @@ function buildEnterprisesPrint(list, filters){
     total: list.length,
     headers: keep.map(i=>ESTAB_HEADERS[i]),
     rows: buildEstabRows(list).map(r=>keep.map(i=>printCell(r[i]))),
-    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,8,4,4,4,6,5,4,6,6],
+    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,8,4,4,4,6,5,4,6,6,10,6],
     dense: true,
   };
 }
@@ -1826,7 +1848,7 @@ function buildEnterpriseAccreditationPrint(d){
 
 const emptyEstablishment = {
   name: "", proprietor: "", email: "", municipality: "", classification: "",
-  type: "", address: "", contact: "", rooms: "", bedCapacityNormal: "", bedCapacityAdjusted: "", petFriendly: "No", functionHalls: [], maleEmployees: "",
+  type: "", address: "", contact: "", rooms: "", bedCapacityNormal: "", bedCapacityAdjusted: "", petFriendly: "No", amenities: [], amenitiesOthers: "", functionHalls: [], maleEmployees: "",
   femaleEmployees: "", remarks: "",
   accredHistory: [], status: "Active", statusOthers: "", year: "",
   tourlista: "No"
@@ -1889,6 +1911,12 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
       const next = (prev.accredHistory||[]).slice();
       next.splice(idx,1);
       return {...prev, accredHistory: next};
+    });
+  };
+  const toggleAmenity = (name) => {
+    setF(prev => {
+      const cur = Array.isArray(prev.amenities) ? prev.amenities : [];
+      return {...prev, amenities: cur.includes(name) ? cur.filter(a=>a!==name) : [...cur, name]};
     });
   };
   const addHall = () => {
@@ -2068,6 +2096,18 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
         </Field>
       </div>
       <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Amenities">
+          <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(230px, 1fr))", gap:6, marginBottom:10}}>
+            {AMENITY_OPTIONS.map(a=>(
+              <label key={a} style={{display:"flex", gap:8, alignItems:"center", fontSize:13, cursor:"pointer"}}>
+                <input type="checkbox" style={{width:"auto"}} checked={(f.amenities||[]).includes(a)} onChange={()=>toggleAmenity(a)} />{a}
+              </label>
+            ))}
+          </div>
+          <input type="text" value={f.amenitiesOthers||""} onChange={set("amenitiesOthers")} placeholder="Other amenities (type here, separate with commas)" />
+        </Field>
+      </div>
+      <div style={{gridColumn:"1 / -1"}}>
         <Field label="Accreditation">
           <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
             Leave blank if the enterprise is not accredited. Add one period for every accreditation. Enter at least one date. DOT List As Of = date of the DOT file where the enterprise first appeared. An accreditation is counted from its Date Accredited (or, if blank, its DOT List As Of date) up to its Valid Until month; with no Valid Until, it is counted only in the year of that date.
@@ -2132,6 +2172,8 @@ function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Bed Capacity (Normal)" value={item.bedCapacityNormal} />
       <ViewField label="Bed Capacity (Adjusted)" value={item.bedCapacityAdjusted} />
       <ViewField label="Pet Friendly?" value={item.petFriendly||"No"} />
+      <ViewField label="Amenities" value={(Array.isArray(item.amenities) && item.amenities.length) ? item.amenities.join(", ") : "—"} />
+      <ViewField label="Other Amenities" value={item.amenitiesOthers || "—"} />
       <ViewField label="Date Updated" value={item.dateUpdated ? formatDateDisplay(item.dateUpdated) : "—"} />
       <ViewField label="Function Hall / Conference Hall Capacity" value={hallsToText(getHalls(item)) || "—"} />
       <ViewField label="Male Employees" value={item.maleEmployees} />
@@ -2180,6 +2222,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
     classification: CLASSIFICATIONS,
     tourlista: TOURLISTA_OPTIONS,
     petFriendly: PET_FRIENDLY_OPTIONS,
+    amenities: AMENITY_OPTIONS,
     status: ESTAB_STATUSES,
     year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
   }), [data]);
@@ -2192,6 +2235,8 @@ function EstablishmentsSection({data, setData, isAdmin}){
     if(!matchSel(filters.status, d.status)) return false;
     if(!matchSel(filters.tourlista, d.tourlista||"No")) return false;
     if(!matchSel(filters.petFriendly, d.petFriendly||"No")) return false;
+    const wantAm = filterSel(filters.amenities);   // an enterprise must have ALL the ticked amenities
+    if(wantAm.length && !wantAm.every(a => (d.amenities||[]).includes(a))) return false;
     if(!matchSel(filters.year, d.year)) return false;
     return true;
   }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
@@ -2294,6 +2339,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
           {key:"status", label:"Status"},
           {key:"tourlista", label:"TourLISTA"},
           {key:"petFriendly", label:"Pet Friendly"},
+          {key:"amenities", label:"Amenities (has all)"},
           {key:"year", label:"Year"},
         ]} />
         <div className="table-wrap">
