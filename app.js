@@ -123,15 +123,53 @@ const ESTAB_STATUSES = ["Active","Not Active","Others"];
 const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
 const TOURLISTA_OPTIONS = ["Yes","No"];
 const PET_FRIENDLY_OPTIONS = ["Yes","No"];
-// Amenities an establishment may offer (tick all that apply; anything else goes in "Other amenities").
-const AMENITY_OPTIONS = [
-  "Air-conditioned rooms", "Free Wi-Fi", "Swimming pool", "Restaurant / Cafe", "Bar / Lounge",
-  "Function / Conference hall", "Parking area", "Beachfront / Beach access", "Hot and cold shower",
-  "TV / Cable", "Laundry service", "Room service", "24-hour reception / front desk", "Backup generator",
-  "Shared kitchen / Kitchenette", "Cottages / Picnic huts", "Videoke / Entertainment", "Playground / Kids area",
-  "Gym / Fitness area", "Spa / Massage", "Airport / Port transfer", "Tour / Activity desk",
-  "Boat / Water sports rental", "Camping area", "PWD-accessible (ramp / facilities)", "CCTV / Security", "Souvenir shop",
+// Facilities (physical places / structures) an establishment has on its premises (tick all that apply; anything else goes in "Other facilities").
+const FACILITY_OPTIONS = [
+  "Swimming pool", "Kiddie pool", "Jacuzzi / Hot tub", "Restaurant", "Cafe / Coffee shop", "Bar / Lounge",
+  "Dining hall / Banquet area", "Function hall", "Conference / Meeting room", "Open-air pavilion / Gazebo",
+  "Cottages / Picnic huts", "Outdoor kitchen / Grilling area", "Shared kitchen / Kitchenette", "Beachfront / Beach access", "Parking lot", "Garden / Park area",
+  "Playground / Kids area", "Basketball / Sports court", "Gym / Fitness room", "Spa / Massage room",
+  "Camping ground", "Dock / Jetty / Boat landing", "Viewing deck / Lookout", "Chapel / Prayer room",
+  "Public restrooms / Comfort rooms", "Changing rooms / Lockers", "Clinic / First-aid room", "Souvenir shop / Store",
 ];
+// Amenities = comforts, services and features offered to guests (Facilities, below, are the physical places on the premises).
+const AMENITY_OPTIONS = [
+  "Air-conditioned rooms", "Electric fan", "Free Wi-Fi", "Hot and cold shower", "TV / Cable",
+  "Refrigerator / Mini-fridge", "Towels & toiletries", "Daily housekeeping", "Laundry service", "Room service",
+  "Complimentary breakfast", "Free drinking water", "24-hour reception / front desk", "Backup generator",
+  "Videoke / Entertainment", "Airport / Port transfer", "Tour / Activity desk", "Boat / Water sports rental",
+  "PWD-accessible (ramp / facilities)", "CCTV / Security",
+];
+// Items that used to be in the Amenities list but are really Facilities -> where they now live.
+const AMENITY_TO_FACILITY = {
+  "Swimming pool": "Swimming pool", "Restaurant / Cafe": "Restaurant", "Bar / Lounge": "Bar / Lounge",
+  "Function / Conference hall": "Function hall", "Parking area": "Parking lot",
+  "Beachfront / Beach access": "Beachfront / Beach access", "Shared kitchen / Kitchenette": "Shared kitchen / Kitchenette",
+  "Cottages / Picnic huts": "Cottages / Picnic huts", "Playground / Kids area": "Playground / Kids area",
+  "Gym / Fitness area": "Gym / Fitness room", "Spa / Massage": "Spa / Massage room",
+  "Camping area": "Camping ground", "Souvenir shop": "Souvenir shop / Store",
+};
+function migrateAmenityFacilities(d){
+  const am = Array.isArray(d && d.amenities) ? d.amenities : [];
+  const moved = [];
+  const keep = am.filter(x => { if(AMENITY_TO_FACILITY[x]){ moved.push(AMENITY_TO_FACILITY[x]); return false; } return true; });
+  if(!moved.length) return d;
+  const fac = Array.isArray(d.facilities) ? d.facilities.slice() : [];
+  moved.forEach(x => { if(!fac.includes(x)) fac.push(x); });
+  return {...d, amenities: keep, facilities: fac};
+}
+// Excel cells: "A; B; C" -> {chosen list items, leftover text, and (amenities only) old items that now belong to Facilities}
+function parseChoiceCell(text, options, legacyMap){
+  const chosen = [], extra = [], legacy = [];
+  String(text||"").split(";").map(x=>x.trim()).filter(Boolean).forEach(t=>{
+    const hit = options.find(o => o.toLowerCase() === t.toLowerCase());
+    if(hit){ if(!chosen.includes(hit)) chosen.push(hit); return; }
+    const lk = legacyMap ? Object.keys(legacyMap).find(k => k.toLowerCase() === t.toLowerCase()) : null;
+    if(lk){ legacy.push(legacyMap[lk]); return; }
+    extra.push(t);
+  });
+  return { chosen, extra, legacy };
+}
 const PHYSICAL_CONDITIONS = ["Lost/Destroyed","Critical","Poor","Fair","Good","Excellent"];
 const DECLARATION_STATUSES = ["Nationally Declared","Locally Declared","Registered","Unregistered/For Validation"];
 
@@ -150,6 +188,8 @@ const ESTAB_FIELD_LABELS = {
   petFriendly: "Pet Friendly",
   amenities: "Amenities",
   amenitiesOthers: "Other Amenities",
+  facilities: "Facilities",
+  facilitiesOthers: "Other Facilities",
   functionHalls: "Function Hall / Conference Hall Capacity",
   maleEmployees: "Male Employees",
   femaleEmployees: "Female Employees",
@@ -249,7 +289,7 @@ const ESTAB_HEADERS = [
   "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
   "Accreditation Status (Computed)","Level of Accreditation","Accreditation Number","Accreditation Validity",
   "Accreditation History (Type|Number|AccredDate|Validity; ...)","Accredited Years (Computed)",
-  "Registered on TourLISTA","Status of Enterprise","Date Updated","Amenities (separated by ;)","Other Amenities",
+  "Registered on TourLISTA","Status of Enterprise","Date Updated","Amenities (separated by ;)","Other Amenities","Facilities (separated by ;)","Other Facilities",
 ];
 
 const ATTR_HEADERS = [
@@ -359,6 +399,7 @@ function formatEstabFieldValue(key, val){
   }
   if(key==="functionHalls") return hallsToText(val) || "None";
   if(key==="amenities") return (Array.isArray(val) && val.length) ? val.join(", ") : "None";
+  if(key==="facilities") return (Array.isArray(val) && val.length) ? val.join(", ") : "None";
   if(key==="accredValidity") return val ? formatDateDisplay(val) : "—";
   if(val===undefined || val===null || val==="") return "—";
   return String(val);
@@ -369,8 +410,8 @@ function diffEstablishment(before, after){
   const a = after || {};
   const changes = [];
   Object.keys(ESTAB_FIELD_LABELS).forEach(k=>{
-    const bv = k==="accredHistory" ? accredHistoryToText(b[k]) : k==="functionHalls" ? hallsToText(b[k]) : k==="amenities" ? (Array.isArray(b[k]) ? b[k].join("; ") : "") : String(b[k]==null?"":b[k]);
-    const av = k==="accredHistory" ? accredHistoryToText(a[k]) : k==="functionHalls" ? hallsToText(a[k]) : k==="amenities" ? (Array.isArray(a[k]) ? a[k].join("; ") : "") : String(a[k]==null?"":a[k]);
+    const bv = k==="accredHistory" ? accredHistoryToText(b[k]) : k==="functionHalls" ? hallsToText(b[k]) : (k==="amenities" || k==="facilities") ? (Array.isArray(b[k]) ? b[k].join("; ") : "") : String(b[k]==null?"":b[k]);
+    const av = k==="accredHistory" ? accredHistoryToText(a[k]) : k==="functionHalls" ? hallsToText(a[k]) : (k==="amenities" || k==="facilities") ? (Array.isArray(a[k]) ? a[k].join("; ") : "") : String(a[k]==null?"":a[k]);
     if(bv !== av){
       changes.push({ key:k, label: ESTAB_FIELD_LABELS[k], from: formatEstabFieldValue(k, b[k]), to: formatEstabFieldValue(k, a[k]) });
     }
@@ -990,6 +1031,7 @@ function buildEstabRows(list){
       (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
       isoToDateObj(d.dateUpdated),
       (Array.isArray(d.amenities) ? d.amenities.join("; ") : ""), d.amenitiesOthers||"",
+      (Array.isArray(d.facilities) ? d.facilities.join("; ") : ""), d.facilitiesOthers||"",
     ];
   });
 }
@@ -1110,6 +1152,8 @@ function parseImportedWorkbook(wb){
       accredHistory = [{ type: accredType || defaultLevel, number: accredNumber, accredDate: "", validity: accredValidity }];
     }
 
+    const amParsed = parseChoiceCell(row["Amenities (separated by ;)"], AMENITY_OPTIONS, AMENITY_TO_FACILITY);
+    const facParsed = parseChoiceCell(row["Facilities (separated by ;)"], FACILITY_OPTIONS, null);
     establishments.push({
       name, proprietor: String(row["Proprietor / Owner"]||"").trim(),
       email: String(row["Email Address"]||"").trim(), municipality, classification, type,
@@ -1130,15 +1174,10 @@ function parseImportedWorkbook(wb){
       year: String(row["Year Established / Registered"]||"").trim(),
       tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
       dateUpdated: excelValueToISODate(row["Date Updated"]) || "",
-      ...(() => {
-        const amenities = [], extra = [];
-        String(row["Amenities (separated by ;)"]||"").split(";").map(x=>x.trim()).filter(Boolean).forEach(t=>{
-          const hit = AMENITY_OPTIONS.find(o => o.toLowerCase() === t.toLowerCase());
-          if(hit){ if(!amenities.includes(hit)) amenities.push(hit); } else extra.push(t);
-        });
-        const other = [String(row["Other Amenities"]||"").trim(), ...extra].filter(Boolean).join("; ");
-        return { amenities, amenitiesOthers: other };
-      })(),
+      amenities: amParsed.chosen,
+      amenitiesOthers: [String(row["Other Amenities"]||"").trim(), ...amParsed.extra].filter(Boolean).join("; "),
+      facilities: [...facParsed.chosen, ...amParsed.legacy.filter(x => !facParsed.chosen.includes(x))].filter((x,i,arr)=>arr.indexOf(x)===i),
+      facilitiesOthers: [String(row["Other Facilities"]||"").trim(), ...facParsed.extra].filter(Boolean).join("; "),
     });
   });
 
@@ -1676,7 +1715,7 @@ function printFilterSummary(fields, filters){
 
 const ENTERPRISE_PRINT_FILTERS = [
   {key:"name", label:"Enterprise"}, {key:"municipality", label:"Municipality"}, {key:"classification", label:"Classification"},
-  {key:"type", label:"Type"}, {key:"status", label:"Status"}, {key:"tourlista", label:"TourLISTA"}, {key:"petFriendly", label:"Pet Friendly"}, {key:"amenities", label:"Amenities (has all)"}, {key:"year", label:"Year"},
+  {key:"type", label:"Type"}, {key:"status", label:"Status"}, {key:"tourlista", label:"TourLISTA"}, {key:"petFriendly", label:"Pet Friendly"}, {key:"amenities", label:"Amenities (has all)"}, {key:"facilities", label:"Facilities (has all)"}, {key:"year", label:"Year"},
 ];
 
 const ACCRED_PRINT_FILTERS = [
@@ -1709,7 +1748,7 @@ function buildEnterprisesPrint(list, filters){
     total: list.length,
     headers: keep.map(i=>ESTAB_HEADERS[i]),
     rows: buildEstabRows(list).map(r=>keep.map(i=>printCell(r[i]))),
-    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,8,4,4,4,6,5,4,6,6,10,6],
+    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,8,4,4,4,6,5,4,6,6,10,6,10,6],
     dense: true,
   };
 }
@@ -1848,7 +1887,7 @@ function buildEnterpriseAccreditationPrint(d){
 
 const emptyEstablishment = {
   name: "", proprietor: "", email: "", municipality: "", classification: "",
-  type: "", address: "", contact: "", rooms: "", bedCapacityNormal: "", bedCapacityAdjusted: "", petFriendly: "No", amenities: [], amenitiesOthers: "", functionHalls: [], maleEmployees: "",
+  type: "", address: "", contact: "", rooms: "", bedCapacityNormal: "", bedCapacityAdjusted: "", petFriendly: "No", amenities: [], amenitiesOthers: "", facilities: [], facilitiesOthers: "", functionHalls: [], maleEmployees: "",
   femaleEmployees: "", remarks: "",
   accredHistory: [], status: "Active", statusOthers: "", year: "",
   tourlista: "No"
@@ -1917,6 +1956,12 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
     setF(prev => {
       const cur = Array.isArray(prev.amenities) ? prev.amenities : [];
       return {...prev, amenities: cur.includes(name) ? cur.filter(a=>a!==name) : [...cur, name]};
+    });
+  };
+  const toggleFacility = (name) => {
+    setF(prev => {
+      const cur = Array.isArray(prev.facilities) ? prev.facilities : [];
+      return {...prev, facilities: cur.includes(name) ? cur.filter(a=>a!==name) : [...cur, name]};
     });
   };
   const addHall = () => {
@@ -2108,6 +2153,18 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
         </Field>
       </div>
       <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Facilities">
+          <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(230px, 1fr))", gap:6, marginBottom:10}}>
+            {FACILITY_OPTIONS.map(a=>(
+              <label key={a} style={{display:"flex", gap:8, alignItems:"center", fontSize:13, cursor:"pointer"}}>
+                <input type="checkbox" style={{width:"auto"}} checked={(f.facilities||[]).includes(a)} onChange={()=>toggleFacility(a)} />{a}
+              </label>
+            ))}
+          </div>
+          <input type="text" value={f.facilitiesOthers||""} onChange={set("facilitiesOthers")} placeholder="Other facilities (type here, separate with commas)" />
+        </Field>
+      </div>
+      <div style={{gridColumn:"1 / -1"}}>
         <Field label="Accreditation">
           <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
             Leave blank if the enterprise is not accredited. Add one period for every accreditation. Enter at least one date. DOT List As Of = date of the DOT file where the enterprise first appeared. An accreditation is counted from its Date Accredited (or, if blank, its DOT List As Of date) up to its Valid Until month; with no Valid Until, it is counted only in the year of that date.
@@ -2174,6 +2231,8 @@ function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Pet Friendly?" value={item.petFriendly||"No"} />
       <ViewField label="Amenities" value={(Array.isArray(item.amenities) && item.amenities.length) ? item.amenities.join(", ") : "—"} />
       <ViewField label="Other Amenities" value={item.amenitiesOthers || "—"} />
+      <ViewField label="Facilities" value={(Array.isArray(item.facilities) && item.facilities.length) ? item.facilities.join(", ") : "—"} />
+      <ViewField label="Other Facilities" value={item.facilitiesOthers || "—"} />
       <ViewField label="Date Updated" value={item.dateUpdated ? formatDateDisplay(item.dateUpdated) : "—"} />
       <ViewField label="Function Hall / Conference Hall Capacity" value={hallsToText(getHalls(item)) || "—"} />
       <ViewField label="Male Employees" value={item.maleEmployees} />
@@ -2223,6 +2282,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
     tourlista: TOURLISTA_OPTIONS,
     petFriendly: PET_FRIENDLY_OPTIONS,
     amenities: AMENITY_OPTIONS,
+    facilities: FACILITY_OPTIONS,
     status: ESTAB_STATUSES,
     year: [...new Set(data.map(d=>d.year).filter(Boolean))].sort().reverse(),
   }), [data]);
@@ -2237,6 +2297,8 @@ function EstablishmentsSection({data, setData, isAdmin}){
     if(!matchSel(filters.petFriendly, d.petFriendly||"No")) return false;
     const wantAm = filterSel(filters.amenities);   // an enterprise must have ALL the ticked amenities
     if(wantAm.length && !wantAm.every(a => (d.amenities||[]).includes(a))) return false;
+    const wantFac = filterSel(filters.facilities);   // an enterprise must have ALL the ticked facilities
+    if(wantFac.length && !wantFac.every(a => (d.facilities||[]).includes(a))) return false;
     if(!matchSel(filters.year, d.year)) return false;
     return true;
   }).sort((a,b)=>(a.municipality+a.name).localeCompare(b.municipality+b.name)), [data, filters]);
@@ -2340,6 +2402,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
           {key:"tourlista", label:"TourLISTA"},
           {key:"petFriendly", label:"Pet Friendly"},
           {key:"amenities", label:"Amenities (has all)"},
+          {key:"facilities", label:"Facilities (has all)"},
           {key:"year", label:"Year"},
         ]} />
         <div className="table-wrap">
@@ -5147,7 +5210,7 @@ function App(){
     loadInventoryFromCloud().then(data => {
       if(cancelled) return;
       if(data){
-        setEstablishments((Array.isArray(data.establishments) ? data.establishments : []).map(d => ({...d, accredHistory: getAccredHistory(d)})));
+        setEstablishments((Array.isArray(data.establishments) ? data.establishments : []).map(d => migrateAmenityFacilities({...d, accredHistory: getAccredHistory(d)})));
         setAttractions(Array.isArray(data.attractions) ? data.attractions : []);
         setCbtos(Array.isArray(data.cbtos) ? data.cbtos : []);
         setOfficers(Array.isArray(data.officers) ? data.officers : []);
