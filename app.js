@@ -238,7 +238,7 @@ const ESTAB_HEADERS = [
   "Total Employees","Remarks","Year Established / Registered","Status of Accreditation",
   "Accreditation Status (Computed)","Level of Accreditation","Accreditation Number","Accreditation Validity",
   "Accreditation History (Type|Number|AccredDate|Validity; ...)","Accredited Years (Computed)",
-  "Registered on TourLISTA","Status of Enterprise",
+  "Registered on TourLISTA","Status of Enterprise","Date Updated",
 ];
 
 const ATTR_HEADERS = [
@@ -976,6 +976,7 @@ function buildEstabRows(list){
       establishmentAccreditedYears(d).join(", "),
       d.tourlista||"No",
       (d.status==="Others" && d.statusOthers) ? d.statusOthers : (d.status||""),
+      isoToDateObj(d.dateUpdated),
     ];
   });
 }
@@ -1115,6 +1116,7 @@ function parseImportedWorkbook(wb){
       status, statusOthers: status==="Others" ? stripListPrefix(row["Status of Enterprise"]) : "",
       year: String(row["Year Established / Registered"]||"").trim(),
       tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
+      dateUpdated: excelValueToISODate(row["Date Updated"]) || "",
     });
   });
 
@@ -1685,7 +1687,7 @@ function buildEnterprisesPrint(list, filters){
     total: list.length,
     headers: keep.map(i=>ESTAB_HEADERS[i]),
     rows: buildEstabRows(list).map(r=>keep.map(i=>printCell(r[i]))),
-    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,8,4,4,4,6,5,4,6],
+    colWidths: [3,10,8,6,6,7,9,6,7,4,4,4,4,8,4,4,4,6,5,4,6,6],
     dense: true,
   };
 }
@@ -1910,6 +1912,7 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
   const isTourGuide = f.type === "Tour Guides";
 
   const finalizeSave = (cleanedForm) => {
+    cleanedForm = {...cleanedForm, dateUpdated: dateToISO(new Date())};   // Date Updated is set automatically on every save
     if(mode === "edit"){
       const changes = diffEstablishment(initialSnapshotRef.current, cleanedForm);
       if(changes.length === 0){
@@ -2032,6 +2035,9 @@ function EstablishmentForm({initial, onCancel, onSave, existingData, mode, onDir
       <Field label="Male Employees"><input type="text" value={f.maleEmployees} onChange={set("maleEmployees")} placeholder="0" disabled={isTourGuide} /></Field>
       <Field label="Female Employees"><input type="text" value={f.femaleEmployees} onChange={set("femaleEmployees")} placeholder="0" disabled={isTourGuide} /></Field>
       <Field label="Remarks"><input type="text" value={f.remarks} onChange={set("remarks")} placeholder="Optional remarks" /></Field>
+      <Field label="Date Updated">
+        <input type="text" value={f.dateUpdated ? formatDateDisplay(f.dateUpdated) : ""} placeholder="Set automatically when you save" disabled readOnly />
+      </Field>
       <Field label="Year (Established / Registered)"><input type="text" value={f.year} onChange={set("year")} placeholder="e.g. 2021" /></Field>
       <Field label="Status of Enterprise">
         <select value={f.status} onChange={set("status")}>
@@ -2126,6 +2132,7 @@ function EstablishmentViewInfo({item, onEdit, onClose, isAdmin}){
       <ViewField label="Bed Capacity (Normal)" value={item.bedCapacityNormal} />
       <ViewField label="Bed Capacity (Adjusted)" value={item.bedCapacityAdjusted} />
       <ViewField label="Pet Friendly?" value={item.petFriendly||"No"} />
+      <ViewField label="Date Updated" value={item.dateUpdated ? formatDateDisplay(item.dateUpdated) : "—"} />
       <ViewField label="Function Hall / Conference Hall Capacity" value={hallsToText(getHalls(item)) || "—"} />
       <ViewField label="Male Employees" value={item.maleEmployees} />
       <ViewField label="Female Employees" value={item.femaleEmployees} />
