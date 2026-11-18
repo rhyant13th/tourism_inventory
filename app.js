@@ -295,7 +295,7 @@ const ESTAB_HEADERS = [
 const ATTR_HEADERS = [
   "No.","Municipality","Name of Attraction","Year Established","Status","Physical Condition",
   "Declaration Status","Attraction Category","Attraction Code","Code Description",
-  "Remarks/Description","Latitude","Longitude",
+  "Remarks/Description","Latitude","Longitude","Registered on TourLISTA",
 ];
 
 const CBTO_HEADERS = [
@@ -1055,7 +1055,7 @@ function buildAttrRows(list){
   return list.map((d,i)=>[
     i+1, d.municipality||"", d.name||"", d.yearEstablished||"", d.selection||"", d.physicalCondition||"",
     d.declarationStatus||"", d.category||"", d.code||"", (ATTRACTION_CODE_INDEX[d.code]||{}).label || "",
-    d.remarks||"", d.latitude||"", d.longitude||"",
+    d.remarks||"", d.latitude||"", d.longitude||"", d.tourlista||"No",
   ]);
 }
 
@@ -1219,6 +1219,7 @@ function parseImportedWorkbook(wb){
       remarks: String(row["Remarks/Description"]||"").trim(),
       latitude: String(row["Latitude"]||"").trim(),
       longitude: String(row["Longitude"]||"").trim(),
+      tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
     });
   });
 
@@ -1742,6 +1743,7 @@ const ACCRED_PRINT_FILTERS = [
 const ATTRACTION_PRINT_FILTERS = [
   {key:"name", label:"Attraction"}, {key:"municipality", label:"Municipality"}, {key:"category", label:"Category"},
   {key:"selection", label:"Status"}, {key:"physicalCondition", label:"Physical Condition"}, {key:"declarationStatus", label:"Declaration Status"},
+  {key:"tourlista", label:"TourLISTA"},
 ];
 
 const CBTO_PRINT_FILTERS = [
@@ -1775,7 +1777,7 @@ function buildAttractionsPrint(list, filters){
     total: list.length,
     headers: ATTR_HEADERS,
     rows: buildAttrRows(list).map(r=>r.map(printCell)),
-    colWidths: [4,8,14,5,7,7,9,10,5,10,12,4.5,4.5],
+    colWidths: [4,8,14,5,7,7,9,10,5,10,12,4.5,4.5,6],
     dense: true,
   };
 }
@@ -2625,7 +2627,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
 const emptyAttraction = {
   municipality: "", name: "", yearEstablished: "", selection: "Existing",
   physicalCondition: "", declarationStatus: "", category: "", code: "",
-  remarks: "", latitude: "", longitude: ""
+  remarks: "", latitude: "", longitude: "", tourlista: "No"
 };
 
 function AttractionForm({initial, onCancel, onSave}){
@@ -2673,6 +2675,11 @@ function AttractionForm({initial, onCancel, onSave}){
           {DECLARATION_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
         </select>
       </Field>
+      <Field label="Registered on TourLISTA?">
+        <select value={f.tourlista||"No"} onChange={set("tourlista")}>
+          {TOURLISTA_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
+        </select>
+      </Field>
       <Field label="Attraction Category" required>
         <select value={f.category} onChange={set("category")}>
           <option value="">Select category</option>
@@ -2711,6 +2718,7 @@ function AttractionsSection({data, setData, isAdmin}){
     selection: ATTRACTION_SELECTIONS,
     physicalCondition: PHYSICAL_CONDITIONS,
     declarationStatus: DECLARATION_STATUSES,
+    tourlista: TOURLISTA_OPTIONS,
   }), []);
 
   const filtered = useMemo(()=>data.filter(d=>{
@@ -2720,6 +2728,7 @@ function AttractionsSection({data, setData, isAdmin}){
     if(!matchSel(filters.selection, d.selection)) return false;
     if(!matchSel(filters.physicalCondition, d.physicalCondition)) return false;
     if(!matchSel(filters.declarationStatus, d.declarationStatus)) return false;
+    if(!matchSel(filters.tourlista, d.tourlista||"No")) return false;
     return true;
   }), [data, filters]);
 
@@ -2781,6 +2790,7 @@ function AttractionsSection({data, setData, isAdmin}){
           <StatCard label="Emerging" value={data.filter(d=>d.selection==="Emerging").length} />
           <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
           <StatCard label="Declared (National/Local)" value={data.filter(d=>d.declarationStatus==="Nationally Declared"||d.declarationStatus==="Locally Declared").length} />
+          <StatCard label="On TourLISTA" value={data.filter(d=>d.tourlista==="Yes").length} />
           <StatCard label="Good / Excellent Condition" value={data.filter(d=>d.physicalCondition==="Good"||d.physicalCondition==="Excellent").length} />
         </div>
         <div className="charts-grid">
@@ -2811,11 +2821,12 @@ function AttractionsSection({data, setData, isAdmin}){
           {key:"selection", label:"Status"},
           {key:"physicalCondition", label:"Physical Condition"},
           {key:"declarationStatus", label:"Declaration Status"},
+          {key:"tourlista", label:"TourLISTA"},
         ]} />
         <div className="table-wrap">
           <table className="table-even">
             {(() => {
-              const cols = ["Attraction","Municipality","Category","Code","Status","Physical Condition","Declaration Status","Remarks / Description","Actions"];
+              const cols = ["Attraction","Municipality","Category","Code","Status","Physical Condition","Declaration Status","TourLISTA","Remarks / Description","Actions"];
               const pct = (100/cols.length).toFixed(4)+"%";
               return (<React.Fragment>
                 <colgroup>{cols.map(h=><col key={h} style={{width:pct}} />)}</colgroup>
@@ -2832,6 +2843,7 @@ function AttractionsSection({data, setData, isAdmin}){
                   <td><Pill tone="teal">{d.selection}</Pill></td>
                   <td>{d.physicalCondition ? <Pill tone={conditionTone(d.physicalCondition)}>{d.physicalCondition}</Pill> : <span className="cell-sub">—</span>}</td>
                   <td>{d.declarationStatus ? <Pill tone={declarationTone(d.declarationStatus)}>{d.declarationStatus}</Pill> : <span className="cell-sub">—</span>}</td>
+                  <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
                   <td>{d.remarks || <span className="cell-sub">—</span>}</td>
                   <td>
                     <div style={{display:"flex",gap:10}}>
@@ -2845,7 +2857,7 @@ function AttractionsSection({data, setData, isAdmin}){
                   </td>
                 </tr>
               ))}
-              {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No attractions match these filters.</td></tr>}
+              {filtered.length===0 && <tr><td colSpan="10" className="empty-row">No attractions match these filters.</td></tr>}
             </tbody>
           </table>
         </div>
