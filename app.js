@@ -122,6 +122,7 @@ const ACCRED_LEVELS = [...PRIMARY_ACCRED_LEVELS, ...SECONDARY_ACCRED_LEVELS];
 const ESTAB_STATUSES = ["Active","Not Active","Others"];
 const ATTRACTION_SELECTIONS = ["Existing","Potential","Emerging"];
 const TOURLISTA_OPTIONS = ["Yes","No"];
+const OPERATIONAL_OPTIONS = ["Operational","Not Operational"];
 const PET_FRIENDLY_OPTIONS = ["Yes","No"];
 // Facilities (physical places / structures) an establishment has on its premises (tick all that apply; anything else goes in "Other facilities").
 const FACILITY_OPTIONS = [
@@ -295,7 +296,7 @@ const ESTAB_HEADERS = [
 const ATTR_HEADERS = [
   "No.","Municipality","Name of Attraction","Year Established","Status","Physical Condition",
   "Declaration Status","Attraction Category","Attraction Code","Code Description",
-  "Remarks/Description","Latitude","Longitude","Registered on TourLISTA",
+  "Remarks/Description","Latitude","Longitude","Registered on TourLISTA","Operational Status","Date Updated",
 ];
 
 const CBTO_HEADERS = [
@@ -1055,7 +1056,8 @@ function buildAttrRows(list){
   return list.map((d,i)=>[
     i+1, d.municipality||"", d.name||"", d.yearEstablished||"", d.selection||"", d.physicalCondition||"",
     d.declarationStatus||"", d.category||"", d.code||"", (ATTRACTION_CODE_INDEX[d.code]||{}).label || "",
-    d.remarks||"", d.latitude||"", d.longitude||"", d.tourlista||"No",
+    d.remarks||"", d.latitude||"", d.longitude||"", d.tourlista||"No", d.operational||"",
+    isoToDateObj(d.dateUpdated),
   ]);
 }
 
@@ -1220,6 +1222,8 @@ function parseImportedWorkbook(wb){
       latitude: String(row["Latitude"]||"").trim(),
       longitude: String(row["Longitude"]||"").trim(),
       tourlista: matchFromList(row["Registered on TourLISTA"], TOURLISTA_OPTIONS) === "Yes" ? "Yes" : "No",
+      operational: matchFromList(row["Operational Status"], OPERATIONAL_OPTIONS) || "",
+      dateUpdated: excelValueToISODate(row["Date Updated"]) || "",
     });
   });
 
@@ -1743,7 +1747,7 @@ const ACCRED_PRINT_FILTERS = [
 const ATTRACTION_PRINT_FILTERS = [
   {key:"name", label:"Attraction"}, {key:"municipality", label:"Municipality"}, {key:"category", label:"Category"},
   {key:"selection", label:"Status"}, {key:"physicalCondition", label:"Physical Condition"}, {key:"declarationStatus", label:"Declaration Status"},
-  {key:"tourlista", label:"TourLISTA"},
+  {key:"tourlista", label:"TourLISTA"}, {key:"operational", label:"Operational Status"},
 ];
 
 const CBTO_PRINT_FILTERS = [
@@ -1777,7 +1781,7 @@ function buildAttractionsPrint(list, filters){
     total: list.length,
     headers: ATTR_HEADERS,
     rows: buildAttrRows(list).map(r=>r.map(printCell)),
-    colWidths: [4,8,14,5,7,7,9,10,5,10,12,4.5,4.5,6],
+    colWidths: [4,8,14,5,7,7,9,10,5,10,12,4.5,4.5,6,7,7],
     dense: true,
   };
 }
@@ -2627,7 +2631,7 @@ function EstablishmentsSection({data, setData, isAdmin}){
 const emptyAttraction = {
   municipality: "", name: "", yearEstablished: "", selection: "Existing",
   physicalCondition: "", declarationStatus: "", category: "", code: "",
-  remarks: "", latitude: "", longitude: "", tourlista: "No"
+  remarks: "", latitude: "", longitude: "", tourlista: "No", operational: "", dateUpdated: ""
 };
 
 function AttractionForm({initial, onCancel, onSave}){
@@ -2680,6 +2684,12 @@ function AttractionForm({initial, onCancel, onSave}){
           {TOURLISTA_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
         </select>
       </Field>
+      <Field label="Operational Status">
+        <select value={f.operational||""} onChange={set("operational")}>
+          <option value="">Select status</option>
+          {OPERATIONAL_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
+        </select>
+      </Field>
       <Field label="Attraction Category" required>
         <select value={f.category} onChange={set("category")}>
           <option value="">Select category</option>
@@ -2694,6 +2704,9 @@ function AttractionForm({initial, onCancel, onSave}){
       </Field>
       <Field label="Latitude"><input type="text" value={f.latitude} onChange={set("latitude")} placeholder="e.g. 12.6625" /></Field>
       <Field label="Longitude"><input type="text" value={f.longitude} onChange={set("longitude")} placeholder="e.g. 120.4855" /></Field>
+      <Field label="Date Updated">
+        <input type="text" value={f.dateUpdated ? formatDateDisplay(f.dateUpdated) : ""} placeholder="Set automatically when you save" disabled readOnly />
+      </Field>
       <div style={{gridColumn:"1 / -1"}}>
         <Field label="Remarks / Description"><input type="text" value={f.remarks||""} onChange={set("remarks")} placeholder="Optional remarks or description of the attraction" /></Field>
       </div>
@@ -2719,6 +2732,7 @@ function AttractionsSection({data, setData, isAdmin}){
     physicalCondition: PHYSICAL_CONDITIONS,
     declarationStatus: DECLARATION_STATUSES,
     tourlista: TOURLISTA_OPTIONS,
+    operational: OPERATIONAL_OPTIONS,
   }), []);
 
   const filtered = useMemo(()=>data.filter(d=>{
@@ -2729,6 +2743,7 @@ function AttractionsSection({data, setData, isAdmin}){
     if(!matchSel(filters.physicalCondition, d.physicalCondition)) return false;
     if(!matchSel(filters.declarationStatus, d.declarationStatus)) return false;
     if(!matchSel(filters.tourlista, d.tourlista||"No")) return false;
+    if(!matchSel(filters.operational, d.operational||"")) return false;
     return true;
   }), [data, filters]);
 
@@ -2750,10 +2765,11 @@ function AttractionsSection({data, setData, isAdmin}){
   }, [data]);
 
   const save = (f) => {
+    const stamped = {...f, dateUpdated: dateToISO(new Date())};   // Date Updated is set automatically on every save
     if(modal.mode==="edit"){
-      setData(prev=>prev.map(d=> d.id===modal.item.id ? {...f, id:d.id} : d));
+      setData(prev=>prev.map(d=> d.id===modal.item.id ? {...stamped, id:d.id} : d));
     } else {
-      setData(prev=>[...prev, {...f, id:"A-"+Date.now()}]);
+      setData(prev=>[...prev, {...stamped, id:"A-"+Date.now()}]);
     }
     setModal(null);
   };
@@ -2791,6 +2807,7 @@ function AttractionsSection({data, setData, isAdmin}){
           <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality)).size} />
           <StatCard label="Declared (National/Local)" value={data.filter(d=>d.declarationStatus==="Nationally Declared"||d.declarationStatus==="Locally Declared").length} />
           <StatCard label="On TourLISTA" value={data.filter(d=>d.tourlista==="Yes").length} />
+          <StatCard label="Operational" value={data.filter(d=>d.operational==="Operational").length} />
           <StatCard label="Good / Excellent Condition" value={data.filter(d=>d.physicalCondition==="Good"||d.physicalCondition==="Excellent").length} />
         </div>
         <div className="charts-grid">
@@ -2822,11 +2839,12 @@ function AttractionsSection({data, setData, isAdmin}){
           {key:"physicalCondition", label:"Physical Condition"},
           {key:"declarationStatus", label:"Declaration Status"},
           {key:"tourlista", label:"TourLISTA"},
+          {key:"operational", label:"Operational Status"},
         ]} />
         <div className="table-wrap">
           <table className="table-even">
             {(() => {
-              const cols = ["Attraction","Municipality","Category","Code","Status","Physical Condition","Declaration Status","TourLISTA","Remarks / Description","Actions"];
+              const cols = ["Attraction","Municipality","Category","Code","Status","Physical Condition","Declaration Status","TourLISTA","Operational","Date Updated","Remarks / Description","Actions"];
               const pct = (100/cols.length).toFixed(4)+"%";
               return (<React.Fragment>
                 <colgroup>{cols.map(h=><col key={h} style={{width:pct}} />)}</colgroup>
@@ -2844,6 +2862,8 @@ function AttractionsSection({data, setData, isAdmin}){
                   <td>{d.physicalCondition ? <Pill tone={conditionTone(d.physicalCondition)}>{d.physicalCondition}</Pill> : <span className="cell-sub">—</span>}</td>
                   <td>{d.declarationStatus ? <Pill tone={declarationTone(d.declarationStatus)}>{d.declarationStatus}</Pill> : <span className="cell-sub">—</span>}</td>
                   <td><Pill tone={d.tourlista==="Yes"?"teal":"gold"}>{d.tourlista==="Yes"?"Yes":"No"}</Pill></td>
+                  <td>{d.operational ? <Pill tone={d.operational==="Operational"?"teal":"danger"}>{d.operational}</Pill> : <span className="cell-sub">—</span>}</td>
+                  <td>{d.dateUpdated ? formatDateDisplay(d.dateUpdated) : <span className="cell-sub">—</span>}</td>
                   <td>{d.remarks || <span className="cell-sub">—</span>}</td>
                   <td>
                     <div style={{display:"flex",gap:10}}>
@@ -2857,7 +2877,7 @@ function AttractionsSection({data, setData, isAdmin}){
                   </td>
                 </tr>
               ))}
-              {filtered.length===0 && <tr><td colSpan="10" className="empty-row">No attractions match these filters.</td></tr>}
+              {filtered.length===0 && <tr><td colSpan="12" className="empty-row">No attractions match these filters.</td></tr>}
             </tbody>
           </table>
         </div>
