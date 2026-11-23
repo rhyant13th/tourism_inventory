@@ -284,6 +284,33 @@ Object.entries(ATTRACTION_CATEGORIES).forEach(([cat, items]) => {
   items.forEach(it => { ATTRACTION_CODE_INDEX[it.code] = { category: cat, label: it.label }; });
 });
 
+// ---- Attraction codes: one attraction can have SEVERAL codes -------------------------------
+// Stored as d.codes = [{category, code, other}]. d.category / d.code always mirror the FIRST entry,
+// so older records, Analytics and older code keep working. Old records without d.codes are read as one code.
+// "Other" codes (199, 299, 414, 799, 901) ask "what is this attraction?" and keep the answer in `other`.
+function isOtherCode(code){
+  const it = ATTRACTION_CODE_INDEX[code];
+  return !!it && /^others?\b/i.test(it.label);
+}
+function getAttrCodes(d){
+  if(d && Array.isArray(d.codes) && d.codes.length){
+    return d.codes.filter(c => c && (c.code || c.category)).map(c => ({category:c.category||"", code:c.code||"", other:c.other||""}));
+  }
+  return (d && (d.code || d.category)) ? [{category:d.category||"", code:d.code||"", other:d.codeOther||""}] : [];
+}
+function attrCodeLabel(c){
+  const it = ATTRACTION_CODE_INDEX[c.code];
+  return it ? it.label : "";
+}
+// "901 — Others (Please specify): Bamboo Organ"
+function attrCodeText(c){
+  return c.code + (attrCodeLabel(c) ? " — " + attrCodeLabel(c) : "") + (isOtherCode(c.code) && c.other ? ": " + c.other : "");
+}
+function attrCategories(d){
+  return getAttrCodes(d).map(c=>c.category).filter((x,i,a)=>x && a.indexOf(x)===i);
+}
+const ATTRACTION_CODE_OPTIONS = Object.values(ATTRACTION_CATEGORIES).flat().map(it => it.code + " — " + it.label);
+
 const ESTAB_HEADERS = [
   "No.","Name of Enterprise","Proprietor / Owner","Municipality","Classification","Type",
   "Address","Contact Number","Email Address","Number of Rooms","Bed Capacity (Normal)","Bed Capacity (Adjusted)","Pet Friendly","Function Hall / Conference Hall Capacity (Name: Capacity; ...)","Male Employees","Female Employees",
@@ -295,7 +322,7 @@ const ESTAB_HEADERS = [
 
 const ATTR_HEADERS = [
   "No.","Municipality","Name of Attraction","Year Established","Status","Physical Condition",
-  "Declaration Status","Attraction Category","Attraction Code","Code Description",
+  "Declaration Status","Attraction Category","Attraction Code","Code Description","Other Attraction (Specify)",
   "Remarks/Description","Latitude","Longitude","Registered on TourLISTA","Operational Status","Date Updated",
 ];
 
@@ -1055,7 +1082,11 @@ function buildEstabRows(list){
 function buildAttrRows(list){
   return list.map((d,i)=>[
     i+1, d.municipality||"", d.name||"", d.yearEstablished||"", d.selection||"", d.physicalCondition||"",
-    d.declarationStatus||"", d.category||"", d.code||"", (ATTRACTION_CODE_INDEX[d.code]||{}).label || "",
+    d.declarationStatus||"",
+    attrCategories(d).join("; "),
+    getAttrCodes(d).map(c=>c.code).join("; "),
+    getAttrCodes(d).map(c=>attrCodeLabel(c)).join("; "),
+    getAttrCodes(d).filter(c=>isOtherCode(c.code) && c.other).map(c=>c.other).join("; "),
     d.remarks||"", d.latitude||"", d.longitude||"", d.tourlista||"No", d.operational||"",
     isoToDateObj(d.dateUpdated),
   ]);
@@ -1203,10 +1234,15 @@ function parseImportedWorkbook(wb){
   attrRows.forEach(row => {
     const name = String(row["Name of Attraction"]||"").trim();
     const municipality = matchFromList(row["Municipality"], MUNICIPALITIES);
-    let code = stripListPrefix(row["Attraction Code"]);
-    let category = matchFromList(row["Attraction Category"], Object.keys(ATTRACTION_CATEGORIES));
-    if(code && !ATTRACTION_CODE_INDEX[code]) code = "";
-    if(code && !ATTRACTION_CATEGORIES[category]) category = ATTRACTION_CODE_INDEX[code].category;
+    // Several codes may be in one cell, separated by ; or , (e.g. "101; 408; 901"). Each code's category is looked up from the code.
+    const otherTexts = String(row["Other Attraction (Specify)"]||"").split(";").map(x=>x.trim()).filter(Boolean);
+    const codes = [];
+    String(row["Attraction Code"]||"").split(/[;,\n]/).map(x=>String(x).trim().replace(/^(\d{3}).*$/, "$1")).forEach(cd => {
+      if(!ATTRACTION_CODE_INDEX[cd] || codes.some(c=>c.code===cd)) return;
+      codes.push({ category: ATTRACTION_CODE_INDEX[cd].category, code: cd, other: isOtherCode(cd) ? (otherTexts.shift()||"") : "" });
+    });
+    const category = codes.length ? codes[0].category : "";
+    const code = codes.length ? codes[0].code : "";
     if(!name || !municipality || !category || !code){ attrSkipped++; return; }
     const rawSelection = matchFromList(row["Status"], ATTRACTION_SELECTIONS);
     const rawPhysicalCondition = matchFromList(row["Physical Condition"], PHYSICAL_CONDITIONS);
@@ -1215,7 +1251,7 @@ function parseImportedWorkbook(wb){
       municipality, name,
       yearEstablished: String(row["Year Established"]||"").trim(),
       selection: ATTRACTION_SELECTIONS.includes(rawSelection) ? rawSelection : "Existing",
-      category, code,
+      category, code, codes,
       physicalCondition: PHYSICAL_CONDITIONS.includes(rawPhysicalCondition) ? rawPhysicalCondition : "",
       declarationStatus: DECLARATION_STATUSES.includes(rawDeclarationStatus) ? rawDeclarationStatus : "",
       remarks: String(row["Remarks/Description"]||"").trim(),
@@ -1746,6 +1782,7 @@ const ACCRED_PRINT_FILTERS = [
 
 const ATTRACTION_PRINT_FILTERS = [
   {key:"name", label:"Attraction"}, {key:"municipality", label:"Municipality"}, {key:"category", label:"Category"},
+  {key:"codeSel", label:"Attraction Code"}, {key:"otherText", label:"Other Attraction"},
   {key:"selection", label:"Status"}, {key:"physicalCondition", label:"Physical Condition"}, {key:"declarationStatus", label:"Declaration Status"},
   {key:"tourlista", label:"TourLISTA"}, {key:"operational", label:"Operational Status"},
 ];
@@ -1781,7 +1818,7 @@ function buildAttractionsPrint(list, filters){
     total: list.length,
     headers: ATTR_HEADERS,
     rows: buildAttrRows(list).map(r=>r.map(printCell)),
-    colWidths: [4,8,14,5,7,7,9,10,5,10,12,4.5,4.5,6,7,7],
+    colWidths: [4,8,13,5,6,6,8,9,5,11,8,11,4,4,5,6,6],
     dense: true,
   };
 }
@@ -2630,27 +2667,48 @@ function EstablishmentsSection({data, setData, isAdmin}){
 
 const emptyAttraction = {
   municipality: "", name: "", yearEstablished: "", selection: "Existing",
-  physicalCondition: "", declarationStatus: "", category: "", code: "",
+  physicalCondition: "", declarationStatus: "", category: "", code: "", codes: [{category:"", code:"", other:""}],
   remarks: "", latitude: "", longitude: "", tourlista: "No", operational: "", dateUpdated: ""
 };
 
 function AttractionForm({initial, onCancel, onSave}){
-  const [f, setF] = useState(initial || emptyAttraction);
+  const [f, setF] = useState(() => {
+    const base = initial || emptyAttraction;
+    const cs = getAttrCodes(base);
+    return {...base, codes: cs.length ? cs : [{category:"", code:"", other:""}]};
+  });
   const set = (k) => (e) => {
     const v = e && e.target ? e.target.value : e;
-    setF(prev=>{
-      const next = {...prev, [k]: v};
-      if(k==="category") next.code = "";
-      return next;
-    });
+    setF(prev=>({...prev, [k]: v}));
   };
-  const codeOptions = f.category ? ATTRACTION_CATEGORIES[f.category] : [];
+  // Attraction codes: one row per code (an attraction can have more than one)
+  const updateCode = (idx, patch) => setF(prev => ({...prev, codes: prev.codes.map((c,i)=> i===idx ? {...c, ...patch} : c)}));
+  const addCode = () => setF(prev => ({...prev, codes: [...prev.codes, {category:"", code:"", other:""}]}));
+  const removeCode = (idx) => setF(prev => {
+    const next = prev.codes.filter((c,i)=>i!==idx);
+    return {...prev, codes: next.length ? next : [{category:"", code:"", other:""}]};
+  });
   const submit = () => {
-    if(!f.municipality || !f.name || !f.category || !f.code){
-      alert("Please complete municipality, name, category, and code.");
+    const codes = f.codes.filter(c => c.category || c.code);
+    if(!f.municipality || !f.name){
+      alert("Please complete municipality and name of the attraction.");
       return;
     }
-    onSave(f);
+    if(!codes.length || codes.some(c => !c.category || !c.code)){
+      alert("Please choose a category and a code for every attraction code row (or remove the empty row).");
+      return;
+    }
+    if(codes.some((c,i) => codes.findIndex(x=>x.code===c.code)!==i)){
+      alert("The same attraction code is listed twice. Please remove the duplicate.");
+      return;
+    }
+    if(codes.some(c => isOtherCode(c.code) && !String(c.other||"").trim())){
+      alert('Please specify what the attraction is for every "Other" code.');
+      return;
+    }
+    const cleaned = codes.map(c => ({category:c.category, code:c.code, other: isOtherCode(c.code) ? String(c.other).trim() : ""}));
+    // category / code mirror the first entry so older records, Analytics and exports keep working
+    onSave({...f, codes: cleaned, category: cleaned[0].category, code: cleaned[0].code});
   };
   return (<div>
     <div className="form-grid">
@@ -2690,18 +2748,37 @@ function AttractionForm({initial, onCancel, onSave}){
           {OPERATIONAL_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}
         </select>
       </Field>
-      <Field label="Attraction Category" required>
-        <select value={f.category} onChange={set("category")}>
-          <option value="">Select category</option>
-          {Object.keys(ATTRACTION_CATEGORIES).map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-      </Field>
-      <Field label="Attraction Code" required>
-        <select value={f.code} onChange={set("code")} disabled={!f.category}>
-          <option value="">{f.category ? "Select code" : "Select category first"}</option>
-          {codeOptions.map(o=><option key={o.code} value={o.code}>{o.code} — {o.label}</option>)}
-        </select>
-      </Field>
+      <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Attraction Category and Code" required>
+          <div style={{fontSize:11, color:"var(--subtext)", marginTop:-2, marginBottom:8}}>
+            An attraction can have more than one code. Click "Add Code" for each additional one. If you choose an "Other" code, type what the attraction is.
+          </div>
+          {f.codes.map((c,idx)=>(
+            <div key={idx} style={{marginBottom:10, paddingBottom:10, borderBottom: idx < f.codes.length-1 ? "1px dashed var(--border, #d6dedb)" : "none"}}>
+              <div style={{display:"grid", gridTemplateColumns:"1fr 1.6fr auto", gap:8, alignItems:"center"}}>
+                <select value={c.category} onChange={e=>updateCode(idx, {category:e.target.value, code:"", other:""})}>
+                  <option value="">Select category</option>
+                  {Object.keys(ATTRACTION_CATEGORIES).map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                </select>
+                <select value={c.code} onChange={e=>updateCode(idx, {code:e.target.value, other: isOtherCode(e.target.value) ? c.other : ""})} disabled={!c.category}>
+                  <option value="">{c.category ? "Select code" : "Select category first"}</option>
+                  {(c.category ? ATTRACTION_CATEGORIES[c.category] : []).map(o=><option key={o.code} value={o.code}>{o.code} — {o.label}</option>)}
+                </select>
+                <button type="button" className="btn-ghost" onClick={()=>removeCode(idx)} title="Remove this code"><Icon d={ICONS.trash} color="#A8442D" /></button>
+              </div>
+              {c.code && (
+                <div style={{fontSize:12, color:"var(--subtext)", marginTop:5}}>
+                  <b>{c.code}</b> — {attrCodeLabel(c)}
+                </div>
+              )}
+              {isOtherCode(c.code) && (
+                <input type="text" style={{marginTop:6}} value={c.other||""} onChange={e=>updateCode(idx, {other:e.target.value})} placeholder="Please specify: what is this attraction? (e.g. Bamboo organ, Heritage house)" />
+              )}
+            </div>
+          ))}
+          <button type="button" className="btn btn-outline-teal btn-sm" onClick={addCode}><Icon d={ICONS.plus} size={13} color="#1C6B6E" /> Add Code</button>
+        </Field>
+      </div>
       <Field label="Latitude"><input type="text" value={f.latitude} onChange={set("latitude")} placeholder="e.g. 12.6625" /></Field>
       <Field label="Longitude"><input type="text" value={f.longitude} onChange={set("longitude")} placeholder="e.g. 120.4855" /></Field>
       <Field label="Date Updated">
@@ -2728,6 +2805,7 @@ function AttractionsSection({data, setData, isAdmin}){
   const options = useMemo(()=>({
     municipality: MUNICIPALITIES,
     category: Object.keys(ATTRACTION_CATEGORIES),
+    codeSel: ATTRACTION_CODE_OPTIONS,
     selection: ATTRACTION_SELECTIONS,
     physicalCondition: PHYSICAL_CONDITIONS,
     declarationStatus: DECLARATION_STATUSES,
@@ -2738,7 +2816,14 @@ function AttractionsSection({data, setData, isAdmin}){
   const filtered = useMemo(()=>data.filter(d=>{
     if(filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
     if(!matchSel(filters.municipality, d.municipality)) return false;
-    if(!matchSel(filters.category, d.category)) return false;
+    const dCodes = getAttrCodes(d);
+    const catSel = filterSel(filters.category);
+    if(catSel.length && !dCodes.some(c => catSel.includes(c.category))) return false;
+    const codeSel = filterSel(filters.codeSel).map(x => String(x).split(" — ")[0]);
+    if(codeSel.length && !dCodes.some(c => codeSel.includes(c.code))) return false;
+    // "Other Attraction" filter: only attractions with an "Other" code whose specified text contains what was typed
+    const otherQ = (filters.otherText||"").trim().toLowerCase();
+    if(otherQ && !dCodes.some(c => isOtherCode(c.code) && (c.other||"").toLowerCase().includes(otherQ))) return false;
     if(!matchSel(filters.selection, d.selection)) return false;
     if(!matchSel(filters.physicalCondition, d.physicalCondition)) return false;
     if(!matchSel(filters.declarationStatus, d.declarationStatus)) return false;
@@ -2752,7 +2837,7 @@ function AttractionsSection({data, setData, isAdmin}){
     return Object.entries(m).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
   }, [data]);
   const byCategory = useMemo(()=>{
-    const m = {}; data.forEach(d=>{ m[d.category]=(m[d.category]||0)+1; });
+    const m = {}; data.forEach(d=>{ attrCategories(d).forEach(c=>{ m[c]=(m[c]||0)+1; }); });
     return Object.entries(m).map(([name,value])=>({name,value}));
   }, [data]);
   const byPhysicalCondition = useMemo(()=>{
@@ -2835,6 +2920,8 @@ function AttractionsSection({data, setData, isAdmin}){
           {key:"name", label:"Attraction", type:"search", placeholder:"Search by name"},
           {key:"municipality", label:"Municipality"},
           {key:"category", label:"Category"},
+          {key:"codeSel", label:"Attraction Code"},
+          {key:"otherText", label:"Other Attraction", type:"search", placeholder:"Search specified \"Other\""},
           {key:"selection", label:"Status"},
           {key:"physicalCondition", label:"Physical Condition"},
           {key:"declarationStatus", label:"Declaration Status"},
@@ -2844,10 +2931,11 @@ function AttractionsSection({data, setData, isAdmin}){
         <div className="table-wrap">
           <table className="table-even">
             {(() => {
-              const cols = ["Attraction","Municipality","Category","Code","Status","Physical Condition","Declaration Status","TourLISTA","Operational","Date Updated","Remarks / Description","Actions"];
-              const pct = (100/cols.length).toFixed(4)+"%";
+              const cols = ["Attraction","Municipality","Category","Code & Description","Status","Physical Condition","Declaration Status","TourLISTA","Operational","Date Updated","Remarks / Description","Actions"];
+              const weights = cols.map(h => h==="Code & Description" ? 2.4 : (h==="Remarks / Description" ? 1.4 : 1));
+              const wSum = weights.reduce((x,y)=>x+y, 0);
               return (<React.Fragment>
-                <colgroup>{cols.map(h=><col key={h} style={{width:pct}} />)}</colgroup>
+                <colgroup>{cols.map((h,i)=><col key={h} style={{width:(weights[i]*100/wSum).toFixed(4)+"%"}} />)}</colgroup>
                 <thead><tr>{cols.map(h=><th key={h}>{h}</th>)}</tr></thead>
               </React.Fragment>);
             })()}
@@ -2856,8 +2944,16 @@ function AttractionsSection({data, setData, isAdmin}){
                 <tr key={d.id} className={i%2?"odd":""}>
                   <td><div style={{fontWeight:600}}>{d.name}</div></td>
                   <td>{d.municipality}</td>
-                  <td>{d.category}</td>
-                  <td>{d.code}</td>
+                  <td>{attrCategories(d).map(c=><div key={c}>{c}</div>)}</td>
+                  <td>
+                    {getAttrCodes(d).map((c,ci)=>(
+                      <div key={ci} style={{marginBottom: ci < getAttrCodes(d).length-1 ? 6 : 0}}>
+                        <span style={{fontWeight:600}}>{c.code}</span>
+                        {attrCodeLabel(c) && <span className="cell-sub"> — {attrCodeLabel(c)}</span>}
+                        {isOtherCode(c.code) && c.other && <div style={{fontSize:12, fontStyle:"italic"}}>Specified: {c.other}</div>}
+                      </div>
+                    ))}
+                  </td>
                   <td><Pill tone="teal">{d.selection}</Pill></td>
                   <td>{d.physicalCondition ? <Pill tone={conditionTone(d.physicalCondition)}>{d.physicalCondition}</Pill> : <span className="cell-sub">—</span>}</td>
                   <td>{d.declarationStatus ? <Pill tone={declarationTone(d.declarationStatus)}>{d.declarationStatus}</Pill> : <span className="cell-sub">—</span>}</td>
@@ -5145,7 +5241,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     ];
   };
   const attrList = attractions.filter(d =>
-    matchSel(filters.category, d.category) &&
+    (filterSel(filters.category).length===0 || attrCategories(d).some(c => filterSel(filters.category).includes(c))) &&
     matchSel(filters.selection, d.selection) &&
     matchSel(filters.municipality, d.municipality));
   const attrCounts = list => [
@@ -5189,7 +5285,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     const cats = [...CATS];
     attrList.forEach(d=>{ if(d.category && !cats.includes(d.category)) cats.push(d.category); });
     rows = cats.map(c=>{
-      const l = attrList.filter(d=>d.category===c);
+      const l = attrList.filter(d=>attrCategories(d).includes(c));
       return [c, ...attrCounts(l), ...PHYSICAL_CONDITIONS.map(p=>l.filter(d=>d.physicalCondition===p).length)];
     });
     fields = [{key:"municipality",all:"All Municipalities"},{key:"selection",all:"All Statuses"}];
