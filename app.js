@@ -4409,31 +4409,85 @@ function AccreditationForm({initial, onCancel, onSave, onDirtyChange}){
 }
 
 // Dropdown with checkboxes: pick one, several, or none (none = all).
+// Dropdown with a typing box: type to narrow the list, then tick what you want. Used by every filter.
+function FilterSearchBox({value, onChange, placeholder}){
+  const inputRef = useRef(null);
+  useEffect(()=>{ if(inputRef.current) inputRef.current.focus(); }, []);
+  return (
+    <input ref={inputRef} type="text" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder || "Type to search..."}
+      onKeyDown={e=>{ if(e.key==="Enter") e.preventDefault(); }}
+      style={{width:"100%", boxSizing:"border-box", padding:"6px 8px", marginBottom:6, fontSize:13, border:"1px solid #cbd5e1", borderRadius:6, background:"#fff", color:"#1f2937"}} />
+  );
+}
+function matchesTyped(text, q){
+  const t = String(text||"").toLowerCase();
+  return String(q||"").toLowerCase().split(/\s+/).filter(Boolean).every(w => t.includes(w));
+}
+
 function MultiSelectFilter({options, value, onChange, allLabel, format}){
   const fmt = format || (x=>x);
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
   const ref = useRef(null);
   useEffect(()=>{
-    const h = (e) => { if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => { if(ref.current && !ref.current.contains(e.target)) { setOpen(false); setQ(""); } };
     document.addEventListener("mousedown", h);
     return ()=>document.removeEventListener("mousedown", h);
   }, []);
   const sel = Array.isArray(value) ? value : [];
   const toggle = (o) => onChange(sel.includes(o) ? sel.filter(x=>x!==o) : [...sel, o]);
   const label = sel.length===0 ? allLabel : (sel.length<=2 ? sel.map(fmt).join(", ") : sel.length + " selected");
+  const shown = options.filter(o => matchesTyped(fmt(o), q));
   return (
     <div ref={ref} style={{position:"relative"}}>
-      <button type="button" className="btn" style={{width:"100%", justifyContent:"space-between", textAlign:"left"}} onClick={()=>setOpen(o=>!o)}>
+      <button type="button" className="btn" style={{width:"100%", justifyContent:"space-between", textAlign:"left"}} onClick={()=>{ setOpen(o=>!o); setQ(""); }}>
         <span>{label}</span><span>▾</span>
       </button>
       {open && (
-        <div style={{position:"absolute", zIndex:30, top:"100%", left:0, minWidth:"100%", maxHeight:280, overflowY:"auto", background:"#fff", color:"#1f2937", border:"1px solid #cbd5e1", borderRadius:8, padding:6, boxShadow:"0 6px 18px rgba(0,0,0,.15)"}}>
-          {options.map(o=>(
+        <div style={{position:"absolute", zIndex:30, top:"100%", left:0, minWidth:"100%", maxHeight:300, overflowY:"auto", background:"#fff", color:"#1f2937", border:"1px solid #cbd5e1", borderRadius:8, padding:6, boxShadow:"0 6px 18px rgba(0,0,0,.15)"}}>
+          {options.length > 6 && <FilterSearchBox value={q} onChange={setQ} />}
+          {shown.map(o=>(
             <label key={o} style={{display:"flex", gap:8, alignItems:"center", padding:"6px 8px", cursor:"pointer", fontSize:13, whiteSpace:"nowrap"}}>
               <input type="checkbox" checked={sel.includes(o)} onChange={()=>toggle(o)} style={{width:"auto"}} />{fmt(o)}
             </label>
           ))}
+          {shown.length===0 && <div style={{padding:"6px 8px", fontSize:12, color:"#64748b"}}>No matches</div>}
           {sel.length>0 && <button type="button" className="clear-btn" onClick={()=>onChange([])}>Clear</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Single-choice dropdown you can type into (used for the year / month / municipality filters).
+// options: [{value, label}]. A value of "" is the "All" choice when it is listed in options.
+function SearchableSelect({options, value, onChange, disabled, title, style}){
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+  useEffect(()=>{
+    const h = (e) => { if(ref.current && !ref.current.contains(e.target)) { setOpen(false); setQ(""); } };
+    document.addEventListener("mousedown", h);
+    return ()=>document.removeEventListener("mousedown", h);
+  }, []);
+  const cur = options.find(o => String(o.value)===String(value));
+  const shown = options.filter(o => matchesTyped(o.label, q));
+  const pick = (v) => { onChange(v); setOpen(false); setQ(""); };
+  return (
+    <div ref={ref} style={{position:"relative", ...(style||{})}}>
+      <button type="button" className="btn" disabled={disabled} title={title} style={{width:"100%", justifyContent:"space-between", textAlign:"left"}} onClick={()=>{ setOpen(o=>!o); setQ(""); }}>
+        <span>{cur ? cur.label : ""}</span><span>▾</span>
+      </button>
+      {open && !disabled && (
+        <div style={{position:"absolute", zIndex:30, top:"100%", left:0, minWidth:"100%", maxHeight:300, overflowY:"auto", background:"#fff", color:"#1f2937", border:"1px solid #cbd5e1", borderRadius:8, padding:6, boxShadow:"0 6px 18px rgba(0,0,0,.15)"}}>
+          {options.length > 6 && <FilterSearchBox value={q} onChange={setQ} />}
+          {shown.map(o=>(
+            <div key={String(o.value)} onClick={()=>pick(o.value)}
+              style={{padding:"6px 8px", cursor:"pointer", fontSize:13, whiteSpace:"nowrap", borderRadius:4, background: String(o.value)===String(value) ? "#e6f2f1" : "transparent", fontWeight: String(o.value)===String(value) ? 600 : 400}}>
+              {o.label}
+            </div>
+          ))}
+          {shown.length===0 && <div style={{padding:"6px 8px", fontSize:12, color:"#64748b"}}>No matches</div>}
         </div>
       )}
     </div>
@@ -4542,9 +4596,7 @@ function AccreditationSection({data, setData, isAdmin}){
 
   const updateFilter = (k, v) => setFilters(prev=>({...prev, [k]: v}));
   const yearSelect = (
-    <select value={statYear} onChange={(e)=>setStatYear(e.target.value)}>
-      {yearOptions.map(y=><option key={y} value={y}>{y}</option>)}
-    </select>
+    <SearchableSelect value={statYear} onChange={setStatYear} options={yearOptions.map(y=>({value:y, label:String(y)}))} />
   );
   const requiredMark = <span style={{color:"var(--danger)"}}> *</span>;
   const currentMonthName = CALENDAR_MONTHS[new Date().getMonth()];
@@ -4583,10 +4635,8 @@ function AccreditationSection({data, setData, isAdmin}){
           </div>
           <div className="filter-field">
             <div className="filter-field-label">Municipality</div>
-            <select value={statMunicipality} onChange={(e)=>setStatMunicipality(e.target.value)}>
-              <option value="">All Municipalities</option>
-              {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
+            <SearchableSelect value={statMunicipality} onChange={setStatMunicipality}
+              options={[{value:"", label:"All Municipalities"}, ...MUNICIPALITIES.map(m=>({value:m, label:m}))]} />
           </div>
         </div>
 
@@ -5360,16 +5410,12 @@ function AnalyticsSection({establishments, attractions, cbtos}){
       </div>
       <div className="ar-controls">
         {isEstabReport && (<>
-          <select className="ar-select" value={accYear} title="Accreditation year"
-            onChange={e=>setFilters(prev=>({...prev, year:e.target.value, month: e.target.value ? prev.month : ""}))}>
-            <option value="">Accreditation: Current status</option>
-            {accYearOptions.map(y=><option key={y} value={y}>Accreditation Year: {y}</option>)}
-          </select>
-          <select className="ar-select" value={accMonth} title="Month (choose a year first)" disabled={!accYear}
-            onChange={e=>setFilters(prev=>({...prev, month:e.target.value}))}>
-            <option value="">{accYear ? "Month: Whole year" : "Month (pick a year first)"}</option>
-            {CALENDAR_MONTHS.map((m,i)=><option key={m} value={String(i+1)}>{m}</option>)}
-          </select>
+          <SearchableSelect style={{minWidth:210}} value={accYear} title="Accreditation year"
+            onChange={v=>setFilters(prev=>({...prev, year:v, month: v ? prev.month : ""}))}
+            options={[{value:"", label:"Accreditation: Current status"}, ...accYearOptions.map(y=>({value:String(y), label:"Accreditation Year: " + y}))]} />
+          <SearchableSelect style={{minWidth:190}} value={accMonth} title="Month (choose a year first)" disabled={!accYear}
+            onChange={v=>setFilters(prev=>({...prev, month:v}))}
+            options={[{value:"", label: accYear ? "Month: Whole year" : "Month (pick a year first)"}, ...CALENDAR_MONTHS.map((m,i)=>({value:String(i+1), label:m}))]} />
         </>)}
         {fields.map(f=>(
           <div key={f.key} style={{minWidth:170}}>
