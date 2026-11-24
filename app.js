@@ -5976,6 +5976,10 @@ function App(){
   const [cloudStatus, setCloudStatus] = useState("loading");
   const [lastSaved, setLastSaved] = useState(null);
   const [cloudError, setCloudError] = useState("");
+  const [cloudLoaded, setCloudLoaded] = useState(false);   // auto-save only starts after the cloud data has been loaded
+  const [saveTick, setSaveTick] = useState(0);
+  const baselineRef = useRef(null);                         // the last version known to be in the cloud
+  const savingRef = useRef(false);
 
   const isAdmin = user && ADMIN_EMAILS.includes(user.email);
 
@@ -5991,6 +5995,8 @@ function App(){
     if (!user) return;
     let cancelled = false;
     setCloudStatus("loading");
+    setCloudLoaded(false);
+    baselineRef.current = null;
     loadInventoryFromCloud().then(data => {
       if(cancelled) return;
       if(data){
@@ -6006,6 +6012,7 @@ function App(){
         if(data.updatedAt) setLastSaved(data.updatedAt);
       }
       setCloudStatus("idle");
+      setCloudLoaded(true);
     }).catch(err => {
       console.error(err);
       if(!cancelled){ setCloudStatus("error"); setCloudError(err && err.message ? err.message : "Unknown error."); }
@@ -6013,11 +6020,43 @@ function App(){
     return () => { cancelled = true; };
   }, [user]);
 
+  const makeSnapshot = () => JSON.stringify([establishments, attractions, cbtos, officers, calendarEvents, dirCategories, arawatanThemes, protectedAreas, paOptions]);
+
+  // AUTO-SAVE: about 1.5 seconds after any change (add / edit / delete / Excel upload / added choices)
+  // the admin's data is saved to the cloud automatically. The Save button still works as before.
+  useEffect(() => {
+    if (!cloudLoaded || !isAdmin) return;
+    const snap = makeSnapshot();
+    if (baselineRef.current === null) { baselineRef.current = snap; return; }   // just loaded: nothing to save yet
+    if (snap === baselineRef.current) return;
+    const t = setTimeout(async () => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setCloudStatus("saving");
+      try {
+        await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents, dirCategories, arawatanThemes, protectedAreas, paOptions);
+        baselineRef.current = snap;
+        setLastSaved(new Date().toISOString());
+        setCloudStatus("idle");
+      } catch(err){
+        console.error(err);
+        setCloudStatus("error");
+        setCloudError("Auto-save failed: " + (err && err.message ? err.message : "unknown error") + ". Your changes are still on screen — click Save to try again.");
+      } finally {
+        savingRef.current = false;
+        setSaveTick(x => x + 1);   // re-check in case something changed while saving
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [cloudLoaded, isAdmin, saveTick, establishments, attractions, cbtos, officers, calendarEvents, dirCategories, arawatanThemes, protectedAreas, paOptions]);
+
   const handleSave = async () => {
     if (!isAdmin) return;
     setCloudStatus("saving");
     try {
+      const snap = makeSnapshot();
       await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents, dirCategories, arawatanThemes, protectedAreas, paOptions);
+      baselineRef.current = snap;
       setLastSaved(new Date().toISOString());
       setCloudStatus("idle");
     } catch(err){
