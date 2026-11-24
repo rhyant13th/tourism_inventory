@@ -3102,6 +3102,25 @@ function buildPaPrint(list, filters){
   };
 }
 
+// Long text in a table cell: shows the first part, with a "Show more" / "Show less" button.
+function ExpandableText({text, limit=140, prefix}){
+  const [open, setOpen] = useState(false);
+  const t = String(text||"");
+  const long = t.length > limit;
+  const shown = (!long || open) ? t : t.slice(0, limit).replace(/\s+\S*$/, "") + "…";
+  return (<div>
+    {prefix}{shown}
+    {long && (
+      <div>
+        <button type="button" onClick={()=>setOpen(o=>!o)}
+          style={{background:"none", border:"none", padding:0, marginTop:3, cursor:"pointer", color:"#1C6B6E", fontSize:12, fontWeight:600, textDecoration:"underline"}}>
+          {open ? "Show less" : "Show more"}
+        </button>
+      </div>
+    )}
+  </div>);
+}
+
 // Dropdown that also lets the user type a NEW choice ("Add ...") and use it right away.
 function SelectWithAdd({label, required, value, onChange, options, onAddOption, addLabel, placeholder}){
   const [adding, setAdding] = useState(false);
@@ -3347,7 +3366,7 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
           <table className="table-even">
             {(() => {
               const cols = ["Name","Municipality","Category","Declaration Status","Operational Status","Description","Coordinates","Date Updated","Actions"];
-              const weights = cols.map(h => h==="Description" ? 2.2 : (h==="Name" ? 1.5 : 1));
+              const weights = cols.map(h => h==="Description" ? 2.2 : (h==="Name" ? 1.4 : (h==="Declaration Status" ? 1.6 : (h==="Operational Status" ? 1.2 : 1))));
               const wSum = weights.reduce((x,y)=>x+y, 0);
               return (<React.Fragment>
                 <colgroup>{cols.map((h,i)=><col key={h} style={{width:(weights[i]*100/wSum).toFixed(4)+"%"}} />)}</colgroup>
@@ -3362,10 +3381,10 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
                   <td>{d.category || <span className="cell-sub">—</span>}</td>
                   <td>
                     {d.declarationStatus ? <Pill tone={declarationTone(d.declarationStatus)}>{d.declarationStatus}</Pill> : <span className="cell-sub">—</span>}
-                    {d.declarationDetail && <div className="cell-sub" style={{marginTop:4}}>{paDetailLabel(d.declarationStatus)}: {d.declarationDetail}</div>}
+                    {d.declarationDetail && <div className="cell-sub" style={{marginTop:4}}><ExpandableText text={d.declarationDetail} limit={70} prefix={paDetailLabel(d.declarationStatus) + ": "} /></div>}
                   </td>
                   <td>{d.operational ? <Pill tone={opTone(d.operational)}>{d.operational}</Pill> : <span className="cell-sub">—</span>}</td>
-                  <td>{d.description || <span className="cell-sub">—</span>}</td>
+                  <td>{d.description ? <ExpandableText text={d.description} limit={160} /> : <span className="cell-sub">—</span>}</td>
                   <td>{(d.latitude || d.longitude) ? <div>{d.latitude || "—"}<br/>{d.longitude || "—"}</div> : <span className="cell-sub">—</span>}</td>
                   <td>{d.dateUpdated ? formatDateDisplay(d.dateUpdated) : <span className="cell-sub">—</span>}</td>
                   <td>
