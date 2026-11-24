@@ -3179,9 +3179,11 @@ function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
       return;
     }
     const lat = String(f.latitude||"").trim(), lng = String(f.longitude||"").trim();
-    if((lat && (isNaN(Number(lat)) || Math.abs(Number(lat))>90)) || (lng && (isNaN(Number(lng)) || Math.abs(Number(lng))>180))){
-      alert("Please enter the coordinates as decimal numbers (e.g. Latitude 12.6625, Longitude 120.4855).");
-      return;
+    // Coordinates never block saving: a missing or unusual value only shows a warning you can accept.
+    if(!lat || !lng){
+      if(!window.confirm("Warning: the " + (!lat && !lng ? "latitude and longitude are" : (!lat ? "latitude is" : "longitude is")) + " blank.\n\nSave this record anyway?")) return;
+    } else if(isNaN(Number(lat)) || Math.abs(Number(lat))>90 || isNaN(Number(lng)) || Math.abs(Number(lng))>180){
+      if(!window.confirm("Warning: the coordinates are not in decimal format (e.g. Latitude 12.6625, Longitude 120.4855).\n\nSave this record anyway?")) return;
     }
     onSave({...f, latitude: lat, longitude: lng, name: f.name.trim(), declarationDetail: detailLabel ? (f.declarationDetail||"").trim() : ""});
   };
