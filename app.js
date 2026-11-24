@@ -1092,7 +1092,7 @@ function buildAttrRows(list){
   ]);
 }
 
-function exportInventoryWorkbook(establishments, attractions){
+function exportInventoryWorkbook(establishments, attractions, protectedAreas){
   const wb = XLSX.utils.book_new();
 
   const infoRows = [
@@ -1101,7 +1101,7 @@ function exportInventoryWorkbook(establishments, attractions){
     ["Generated: " + new Date().toLocaleString()],
     [""],
     ["Instructions"],
-    ["1. Do not rename, reorder, or delete the column headers on the 'Enterprises' and 'Attractions' sheets."],
+    ["1. Do not rename, reorder, or delete the column headers on the 'Enterprises', 'Attractions' and 'Protected Areas' sheets."],
     ["2. To add or correct records offline, edit the rows or add new rows below the existing data on each sheet."],
     ["3. Save this file, then use the 'Upload Encoded Excel' button in the app to bulk-import the rows."],
     ["4. This same file, once complete, can be submitted directly to the national agency."],
@@ -1125,6 +1125,10 @@ function exportInventoryWorkbook(establishments, attractions){
   const wsAttr = XLSX.utils.aoa_to_sheet([ATTR_HEADERS, ...buildAttrRows(attractions)]);
   wsAttr['!cols'] = ATTR_HEADERS.map(h => ({ wch: Math.max(14, h.length + 2) }));
   XLSX.utils.book_append_sheet(wb, wsAttr, "Attractions");
+
+  const wsPa = XLSX.utils.aoa_to_sheet([PA_HEADERS, ...buildPaRows(protectedAreas || [])]);
+  wsPa['!cols'] = PA_HEADERS.map(h => ({ wch: Math.max(16, Math.min(40, h.length + 2)) }));
+  XLSX.utils.book_append_sheet(wb, wsPa, "Protected Areas");
 
   XLSX.writeFile(wb, "Tourism-Inventory-Backup-" + timestamp() + ".xlsx");
 }
@@ -1173,6 +1177,7 @@ function sheetToRowsAny(wb, sheetNames, canonicalHeaders){
 function parseImportedWorkbook(wb){
   const estabRows = sheetToRowsAny(wb, ["Enterprises","Establishments"], ESTAB_HEADERS);
   const attrRows = sheetToRows(wb, "Attractions", ATTR_HEADERS);
+  const paRows = sheetToRows(wb, "Protected Areas", PA_HEADERS);
 
   const establishments = [];
   let estabSkipped = 0;
@@ -1263,7 +1268,25 @@ function parseImportedWorkbook(wb){
     });
   });
 
-  return { establishments, estabSkipped, attractions, attrSkipped };
+  // Protected Areas and Conservation Sites (new categories / statuses typed in the sheet are kept as they are)
+  const protectedAreas = [];
+  let paSkipped = 0;
+  paRows.forEach(row => {
+    const name = String(row[PA_HEADERS[1]]||"").trim();
+    const municipality = matchFromList(row["Municipality"], MUNICIPALITIES);
+    const category = matchFromList(row["Category"], PA_DEFAULT_OPTIONS.category);
+    if(!name || !municipality || !category){ paSkipped++; return; }
+    protectedAreas.push({
+      name, municipality, category,
+      declarationStatus: matchFromList(row["Declaration Status"], PA_DEFAULT_OPTIONS.declaration) || "",
+      declarationDetail: String(row[PA_HEADERS[5]]||"").trim(),
+      operational: matchFromList(row["Operational Status"], PA_DEFAULT_OPTIONS.operational) || "",
+      description: String(row["Description"]||"").trim(),
+      dateUpdated: excelValueToISODate(row["Date Updated"]) || "",
+    });
+  });
+
+  return { establishments, estabSkipped, attractions, attrSkipped, protectedAreas, paSkipped };
 }
 
 
@@ -1525,11 +1548,13 @@ function withTimeout(promise, ms, label){
   ]);
 }
 
-async function saveInventoryToCloud(establishments, attractions, cbtos, officers, calendar, directoryCategories, arawatanThemes){
+async function saveInventoryToCloud(establishments, attractions, cbtos, officers, calendar, directoryCategories, arawatanThemes, protectedAreas, paOptions){
   await withTimeout(CLOUD_DOC().set({
     establishments, attractions, cbtos: cbtos||[], officers: officers||[], calendar: calendar||[],
     directoryCategories: (directoryCategories && directoryCategories.length) ? directoryCategories : DIRECTORY_CATEGORIES,
     arawatanThemes: arawatanThemes || {},
+    protectedAreas: protectedAreas || [],
+    paOptions: paOptions || {},
     updatedAt: new Date().toISOString(),
   }), 15000, "Saving");
 }
@@ -2984,6 +3009,374 @@ function AttractionsSection({data, setData, isAdmin}){
     {modal && isAdmin && (
       <Modal title={modal.mode==="edit" ? "Edit Attraction" : "Add Attraction"} onClose={()=>setModal(null)}>
         <AttractionForm initial={modal.item} onCancel={()=>setModal(null)} onSave={save} />
+      </Modal>
+    )}
+    {toDelete && (
+      <ConfirmDialog text={'Delete "'+toDelete.name+'"? This cannot be undone.'} onCancel={()=>setToDelete(null)} onConfirm={handleDelete} />
+    )}
+  </div>);
+}
+
+
+// ======================================================================
+// PROTECTED AREAS AND CONSERVATION SITES INVENTORY (new section, placed after Attractions)
+// ======================================================================
+/**
+ * PROTECTED AREAS & CONSERVATION SITES: list, dashboard, add/edit form, filters and print report.
+ * Category, Declaration Status and Operational Status are dropdowns with an "Add" option; the
+ * added choices are saved to the cloud together with the records (field: paOptions).
+ */
+
+const PA_DEFAULT_OPTIONS = {
+  category: [
+    "Marine Protected Areas","Fish Sanctuaries","Marine Reserves","Mangrove Conservation Areas","Natural Parks",
+    "Wildlife Sanctuaries","Bird Sanctuaries","Protected Landscapes and Seascapes","Watershed Forest Reserves"
+  ],
+  declaration: ["Nationally Declared","Locally Declared","Registered","Unregistered/For Validation"],
+  operational: ["Operational","Not Operational/Closed"],
+};
+
+// Merge saved options with the defaults (defaults first, then anything added by the user)
+function mergePaOptions(saved){
+  const out = {};
+  Object.keys(PA_DEFAULT_OPTIONS).forEach(k=>{
+    const extra = (saved && Array.isArray(saved[k])) ? saved[k] : [];
+    out[k] = [...PA_DEFAULT_OPTIONS[k], ...extra.filter(x => x && !PA_DEFAULT_OPTIONS[k].some(d => d.toLowerCase()===String(x).toLowerCase()))];
+  });
+  return out;
+}
+
+// The extra detail asked for under each Declaration Status
+function paDetailLabel(status){
+  const s = String(status||"").toLowerCase();
+  if(!s || s.includes("unregistered")) return "";
+  if(s.includes("national")) return "Laws Applied";
+  if(s.includes("local")) return "Ordinance Number";
+  if(s.startsWith("registered") || s.includes("registration")) return "Registration";
+  return "Details (optional)";
+}
+function paDetailPlaceholder(status){
+  const s = String(status||"").toLowerCase();
+  if(s.includes("national")) return "e.g. Republic Act No. 7586 (NIPAS Act), Proclamation No. ...";
+  if(s.includes("local")) return "e.g. Municipal Ordinance No. 2015-04";
+  if(s.startsWith("registered") || s.includes("registration")) return "e.g. Registering body and registration number";
+  return "";
+}
+
+const PA_PRINT_FILTERS = [
+  {key:"name", label:"Name"}, {key:"municipality", label:"Municipality"}, {key:"category", label:"Category"},
+  {key:"declarationStatus", label:"Declaration Status"}, {key:"operational", label:"Operational Status"},
+  {key:"description", label:"Description"},
+];
+const PA_HEADERS = ["No.","Name of Protected Area or Conservation Site","Municipality","Category","Declaration Status","Laws Applied / Ordinance No. / Registration","Operational Status","Description","Date Updated"];
+
+function buildPaRows(list){
+  return list.map((d,i)=>[
+    i+1, d.name||"", d.municipality||"", d.category||"", d.declarationStatus||"", d.declarationDetail||"",
+    d.operational||"", d.description||"", isoToDateObj(d.dateUpdated),
+  ]);
+}
+
+function buildPaPrint(list, filters){
+  const q = (k) => (filters && typeof filters[k]==="string" && filters[k].trim()) ? filters[k].trim() : "";
+  const textParts = [];
+  if(q("name")) textParts.push("Name: " + q("name"));
+  if(q("description")) textParts.push("Description: " + q("description"));
+  const selFilters = PA_PRINT_FILTERS.filter(fl => !["name","description"].includes(fl.key));
+  const sel = printFilterSummary(selFilters, filters);
+  const all = [...textParts, ...(sel==="None (all records)" ? [] : [sel])];
+  return {
+    title: "Protected Areas and Conservation Sites Records",
+    filterText: all.length ? all.join("; ") : "None (all records)",
+    total: list.length,
+    headers: PA_HEADERS,
+    rows: list.map((d,i)=>[
+      i+1, d.name, d.municipality, d.category, d.declarationStatus, d.declarationDetail, d.operational, d.description,
+      d.dateUpdated ? formatDateDisplay(d.dateUpdated) : ""
+    ].map(printCell)),
+    colWidths: [4,16,10,12,10,15,9,20,8],
+    dense: false,
+  };
+}
+
+// Dropdown that also lets the user type a NEW choice ("Add ...") and use it right away.
+function SelectWithAdd({label, required, value, onChange, options, onAddOption, addLabel, placeholder}){
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState("");
+  const [err, setErr] = useState("");
+  const list = (!value || options.includes(value)) ? options : [...options, value];
+  const commit = () => {
+    const name = text.trim();
+    if(!name){ setErr("Please type a name."); return; }
+    const existing = options.find(o => o.toLowerCase()===name.toLowerCase());
+    if(existing){ onChange(existing); }
+    else { onAddOption(name); onChange(name); }
+    setAdding(false); setText(""); setErr("");
+  };
+  return (<Field label={label} required={required}>
+    <select value={value||""} onChange={e=>onChange(e.target.value)}>
+      <option value="">{placeholder || "Select"}</option>
+      {list.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>
+    {!adding && (
+      <div style={{display:"flex", gap:6, marginTop:6}}>
+        <button type="button" className="btn btn-outline-teal btn-sm" onClick={()=>setAdding(true)}><Icon d={ICONS.plus} size={12} color="#1C6B6E" /> {addLabel}</button>
+      </div>
+    )}
+    {adding && (
+      <div style={{marginTop:6, padding:8, border:"1px solid var(--border)", borderRadius:8, background:"var(--bg, #f7f8f8)"}}>
+        <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>New choice</div>
+        <input type="text" value={text} autoFocus placeholder="Type the new choice"
+          onChange={e=>{ setText(e.target.value); setErr(""); }}
+          onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); commit(); } }} />
+        {err && <div style={{fontSize:12, color:"var(--danger)", marginTop:4}}>{err}</div>}
+        <div style={{display:"flex", gap:6, marginTop:6}}>
+          <button type="button" className="btn btn-sm" onClick={()=>{ setAdding(false); setText(""); setErr(""); }}>Cancel</button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={commit}>Add</button>
+        </div>
+      </div>
+    )}
+  </Field>);
+}
+
+const emptyProtectedArea = {
+  name: "", municipality: "", category: "", declarationStatus: "", declarationDetail: "",
+  operational: "", description: "", dateUpdated: ""
+};
+
+function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
+  const [f, setF] = useState(() => ({...emptyProtectedArea, ...(initial||{})}));
+  const set = (k) => (e) => {
+    const v = e && e.target ? e.target.value : e;
+    setF(prev=>({...prev, [k]: v}));
+  };
+  const detailLabel = paDetailLabel(f.declarationStatus);
+  const submit = () => {
+    if(!f.name.trim() || !f.municipality || !f.category){
+      alert("Please complete the name, municipality and category.");
+      return;
+    }
+    onSave({...f, name: f.name.trim(), declarationDetail: detailLabel ? (f.declarationDetail||"").trim() : ""});
+  };
+  return (<div>
+    <div className="form-grid">
+      <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Name of Protected Area or Conservation Site" required>
+          <input type="text" value={f.name} onChange={set("name")} placeholder="e.g. Apo Reef Natural Park" />
+        </Field>
+      </div>
+      <Field label="Municipality" required>
+        <select value={f.municipality} onChange={set("municipality")}>
+          <option value="">Select municipality</option>
+          {MUNICIPALITIES.map(m=><option key={m} value={m}>{m}</option>)}
+        </select>
+      </Field>
+      <SelectWithAdd label="Category" required value={f.category} onChange={set("category")}
+        options={options.category} onAddOption={(n)=>onAddOption("category", n)} addLabel="Add Category" placeholder="Select category" />
+      <SelectWithAdd label="Declaration Status" value={f.declarationStatus}
+        onChange={(v)=>setF(prev=>({...prev, declarationStatus: v}))}
+        options={options.declaration} onAddOption={(n)=>onAddOption("declaration", n)} addLabel="Add Declaration Status" placeholder="Select status" />
+      <SelectWithAdd label="Operational Status" value={f.operational} onChange={set("operational")}
+        options={options.operational} onAddOption={(n)=>onAddOption("operational", n)} addLabel="Add Operational Status" placeholder="Select status" />
+      {detailLabel && (
+        <div style={{gridColumn:"1 / -1"}}>
+          <Field label={detailLabel}>
+            <input type="text" value={f.declarationDetail||""} onChange={set("declarationDetail")} placeholder={paDetailPlaceholder(f.declarationStatus)} />
+          </Field>
+        </div>
+      )}
+      <Field label="Date Updated">
+        <input type="text" value={f.dateUpdated ? formatDateDisplay(f.dateUpdated) : ""} placeholder="Set automatically when you save" disabled readOnly />
+      </Field>
+      <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Description">
+          <textarea rows={4} value={f.description||""} onChange={set("description")} placeholder="Describe the protected area or conservation site" style={{width:"100%", resize:"vertical"}} />
+        </Field>
+      </div>
+    </div>
+    <div className="form-actions">
+      <button className="btn" onClick={onCancel}>Cancel</button>
+      <button className="btn btn-primary" onClick={submit}>Save Record</button>
+    </div>
+  </div>);
+}
+
+function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, setOptions}){
+  const [view, setView] = useState("dashboard");
+  const [printing, setPrinting] = useState(false);
+  const [filters, setFilters] = useState({});
+  const [modal, setModal] = useState(null);
+  const [toDelete, setToDelete] = useState(null);
+
+  // choices = saved list + anything found in the records
+  const options = useMemo(()=>{
+    const base = mergePaOptions(savedOptions);
+    const extra = (k, field) => [...new Set(data.map(d=>d[field]).filter(v=>v && !base[k].includes(v)))];
+    return {
+      category: [...base.category, ...extra("category","category")],
+      declaration: [...base.declaration, ...extra("declaration","declarationStatus")],
+      operational: [...base.operational, ...extra("operational","operational")],
+    };
+  }, [savedOptions, data]);
+
+  const addOption = (kind, name) => {
+    setOptions(prev => {
+      const cur = mergePaOptions(prev);
+      if(cur[kind].some(o=>o.toLowerCase()===name.toLowerCase())) return prev;
+      return {...cur, [kind]: [...cur[kind], name]};
+    });
+  };
+
+  const filterOptions = useMemo(()=>({
+    municipality: MUNICIPALITIES,
+    category: options.category,
+    declarationStatus: options.declaration,
+    operational: options.operational,
+  }), [options]);
+
+  const filtered = useMemo(()=>data.filter(d=>{
+    const nq = (filters.name||"").trim().toLowerCase();
+    if(nq && !(d.name||"").toLowerCase().includes(nq)) return false;
+    const dq = (filters.description||"").trim().toLowerCase();
+    if(dq && !((d.description||"")+" "+(d.declarationDetail||"")).toLowerCase().includes(dq)) return false;
+    if(!matchSel(filters.municipality, d.municipality)) return false;
+    if(!matchSel(filters.category, d.category)) return false;
+    if(!matchSel(filters.declarationStatus, d.declarationStatus||"")) return false;
+    if(!matchSel(filters.operational, d.operational||"")) return false;
+    return true;
+  }), [data, filters]);
+
+  const countBy = (fn, blank) => {
+    const m = {}; data.forEach(d=>{ const k = fn(d) || blank; m[k]=(m[k]||0)+1; });
+    return Object.entries(m).map(([name,count])=>({name,count,value:count})).sort((a,b)=>b.count-a.count);
+  };
+  const byMunicipality = useMemo(()=>countBy(d=>d.municipality, "Not Specified"), [data]);
+  const byCategory = useMemo(()=>countBy(d=>d.category, "Not Specified"), [data]);
+  const byDeclaration = useMemo(()=>countBy(d=>d.declarationStatus, "Not Specified"), [data]);
+  const byOperational = useMemo(()=>countBy(d=>d.operational, "Not Specified"), [data]);
+
+  const save = (f) => {
+    const stamped = {...f, dateUpdated: dateToISO(new Date())};   // Date Updated is set automatically on every save
+    if(modal.mode==="edit"){
+      setData(prev=>prev.map(d=> d.id===modal.item.id ? {...stamped, id:d.id} : d));
+    } else {
+      setData(prev=>[...prev, {...stamped, id:"PA-"+Date.now()}]);
+    }
+    setModal(null);
+  };
+  const handleDelete = () => {
+    setData(prev => prev.filter(d => d.id !== toDelete.id));
+    setToDelete(null);
+  };
+
+  const opTone = (s) => !s ? "grey" : (/^not|closed/i.test(s) ? "danger" : "teal");
+
+  return (<div>
+    <div className="toolbar-row">
+      <div className="view-toggle">
+        <button className={view==="dashboard"?"active":""} onClick={()=>setView("dashboard")}>Dashboard</button>
+        <button className={view==="records"?"active":""} onClick={()=>setView("records")}>Records</button>
+      </div>
+      <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
+        {view==="records" && (
+          <button className="btn btn-outline-teal btn-sm" onClick={()=>{ if(!filtered.length){ alert("No records to print for this selection."); return; } setPrinting(true); }}>
+            <PrintIcon /> Print Report
+          </button>
+        )}
+        {isAdmin && (
+          <button className="btn btn-primary" onClick={()=>setModal({mode:"add"})}><Icon d={ICONS.plus} size={15} color="#fff" /> Add Protected Area / Conservation Site</button>
+        )}
+      </div>
+    </div>
+
+    {view==="dashboard" ? (
+      <div>
+        <div className="stat-cards">
+          <StatCard label="Total Protected Areas & Conservation Sites" value={data.length} />
+          <StatCard label="Operational" value={data.filter(d=>d.operational==="Operational").length} />
+          <StatCard label="Not Operational / Closed" value={data.filter(d=>/^not|closed/i.test(d.operational||"")).length} />
+          <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality).filter(Boolean)).size} />
+          <StatCard label="Nationally Declared" value={data.filter(d=>d.declarationStatus==="Nationally Declared").length} />
+          <StatCard label="Locally Declared" value={data.filter(d=>d.declarationStatus==="Locally Declared").length} />
+          <StatCard label="Registered" value={data.filter(d=>d.declarationStatus==="Registered").length} />
+          <StatCard label="Unregistered / For Validation" value={data.filter(d=>d.declarationStatus==="Unregistered/For Validation").length} />
+        </div>
+        <div className="charts-grid">
+          <div className="panel">
+            <div className="panel-title">Per Municipality</div>
+            <BarList data={byMunicipality} color="#1C6B6E" />
+          </div>
+          <div className="panel">
+            <div className="panel-title">Per Category</div>
+            <Donut data={byCategory} total={data.length} />
+          </div>
+          <div className="panel span-2">
+            <div className="panel-title">Per Declaration Status</div>
+            <BarList data={byDeclaration} color="#0E3B3C" />
+          </div>
+          <div className="panel span-2">
+            <div className="panel-title">Per Operational Status</div>
+            <BarList data={byOperational} color="#C08A2E" />
+          </div>
+        </div>
+      </div>
+    ) : (
+      <div>
+        <FilterBar filters={filters} setFilters={setFilters} options={filterOptions} fields={[
+          {key:"name", label:"Name", type:"search", placeholder:"Search by name"},
+          {key:"municipality", label:"Municipality"},
+          {key:"category", label:"Category"},
+          {key:"declarationStatus", label:"Declaration Status"},
+          {key:"operational", label:"Operational Status"},
+          {key:"description", label:"Description", type:"search", placeholder:"Search description / laws / ordinance"},
+        ]} />
+        <div className="table-wrap">
+          <table className="table-even">
+            {(() => {
+              const cols = ["Name","Municipality","Category","Declaration Status","Operational Status","Description","Date Updated","Actions"];
+              const weights = cols.map(h => h==="Description" ? 2.2 : (h==="Name" ? 1.5 : 1));
+              const wSum = weights.reduce((x,y)=>x+y, 0);
+              return (<React.Fragment>
+                <colgroup>{cols.map((h,i)=><col key={h} style={{width:(weights[i]*100/wSum).toFixed(4)+"%"}} />)}</colgroup>
+                <thead><tr>{cols.map(h=><th key={h}>{h}</th>)}</tr></thead>
+              </React.Fragment>);
+            })()}
+            <tbody>
+              {filtered.map((d,i)=>(
+                <tr key={d.id} className={i%2?"odd":""}>
+                  <td><div style={{fontWeight:600}}>{d.name}</div></td>
+                  <td>{d.municipality}</td>
+                  <td>{d.category || <span className="cell-sub">—</span>}</td>
+                  <td>
+                    {d.declarationStatus ? <Pill tone={declarationTone(d.declarationStatus)}>{d.declarationStatus}</Pill> : <span className="cell-sub">—</span>}
+                    {d.declarationDetail && <div className="cell-sub" style={{marginTop:4}}>{paDetailLabel(d.declarationStatus)}: {d.declarationDetail}</div>}
+                  </td>
+                  <td>{d.operational ? <Pill tone={opTone(d.operational)}>{d.operational}</Pill> : <span className="cell-sub">—</span>}</td>
+                  <td>{d.description || <span className="cell-sub">—</span>}</td>
+                  <td>{d.dateUpdated ? formatDateDisplay(d.dateUpdated) : <span className="cell-sub">—</span>}</td>
+                  <td>
+                    <div style={{display:"flex",gap:10}}>
+                      {isAdmin && (
+                        <>
+                          <button className="btn-ghost" onClick={()=>setModal({mode:"edit", item:d})}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
+                          <button className="btn-ghost" onClick={()=>setToDelete(d)}><Icon d={ICONS.trash} color="#A8442D" /></button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length===0 && <tr><td colSpan="8" className="empty-row">No protected areas or conservation sites match these filters.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {printing && <RecordsPrintReport {...buildPaPrint(filtered, filters)} onDone={()=>setPrinting(false)} />}
+    {modal && isAdmin && (
+      <Modal title={modal.mode==="edit" ? "Edit Protected Area / Conservation Site" : "Add Protected Area / Conservation Site"} onClose={()=>setModal(null)}>
+        <ProtectedAreaForm initial={modal.item} options={options} onAddOption={addOption} onCancel={()=>setModal(null)} onSave={save} />
       </Modal>
     )}
     {toDelete && (
@@ -5054,7 +5447,7 @@ function RecordsPrintReport({ title, filterText, total, headers, rows, colWidths
  * BACKUP TOOLBAR: Excel backup / restore buttons above each screen.
  */
 
-function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, cloudStatus, lastSaved, cloudError, onSave, isAdmin }){
+function BackupToolbar({ establishments, attractions, setEstablishments, setAttractions, protectedAreas, setProtectedAreas, cloudStatus, lastSaved, cloudError, onSave, isAdmin }){
   const fileRef = useRef(null);
 
   const handleExport = () => {
@@ -5062,7 +5455,7 @@ function BackupToolbar({ establishments, attractions, setEstablishments, setAttr
       alert("View-only mode: only the admin can download data.");
       return;
     }
-    exportInventoryWorkbook(establishments, attractions);
+    exportInventoryWorkbook(establishments, attractions, protectedAreas);
   };
 
   const handleFile = (e) => {
@@ -5073,7 +5466,7 @@ function BackupToolbar({ establishments, attractions, setEstablishments, setAttr
     reader.onload = (evt) => {
       try {
         const wb = XLSX.read(evt.target.result, { type: "array", cellDates: true });
-        const { establishments: newEstab, estabSkipped, attractions: newAttr, attrSkipped } = parseImportedWorkbook(wb);
+        const { establishments: newEstab, estabSkipped, attractions: newAttr, attrSkipped, protectedAreas: newPa, paSkipped } = parseImportedWorkbook(wb);
 
         const existingEstabKeys = new Set(establishments.map(d => (d.name+"|"+d.municipality).toLowerCase()));
         const estabToAdd = [];
@@ -5095,8 +5488,19 @@ function BackupToolbar({ establishments, attractions, setEstablishments, setAttr
           attrToAdd.push({ ...d, id: "A-import-"+Date.now()+"-"+Math.random().toString(36).slice(2,7) });
         });
 
+        const existingPaKeys = new Set((protectedAreas||[]).map(d => (d.name+"|"+d.municipality).toLowerCase()));
+        const paToAdd = [];
+        let paDup = 0;
+        newPa.forEach(d => {
+          const key = (d.name+"|"+d.municipality).toLowerCase();
+          if(existingPaKeys.has(key)){ paDup++; return; }
+          existingPaKeys.add(key);
+          paToAdd.push({ ...d, id: "PA-import-"+Date.now()+"-"+Math.random().toString(36).slice(2,7) });
+        });
+
         if(estabToAdd.length) setEstablishments(prev => [...prev, ...estabToAdd]);
         if(attrToAdd.length) setAttractions(prev => [...prev, ...attrToAdd]);
+        if(paToAdd.length && setProtectedAreas) setProtectedAreas(prev => [...prev, ...paToAdd]);
 
         alert(
           "Import complete.\n\n" +
@@ -5105,10 +5509,13 @@ function BackupToolbar({ establishments, attractions, setEstablishments, setAttr
           "Enterprises skipped (already in inventory): " + estabDup + "\n\n" +
           "Attractions added: " + attrToAdd.length + "\n" +
           "Attractions skipped (missing required fields): " + attrSkipped + "\n" +
-          "Attractions skipped (already in inventory): " + attrDup
+          "Attractions skipped (already in inventory): " + attrDup + "\n\n" +
+          "Protected Areas added: " + paToAdd.length + "\n" +
+          "Protected Areas skipped (missing required fields): " + paSkipped + "\n" +
+          "Protected Areas skipped (already in inventory): " + paDup
         );
       } catch(err){
-        alert("Could not read this file. Please upload the .xlsx backup file with the original 'Enterprises' and 'Attractions' sheets, unedited headers.");
+        alert("Could not read this file. Please upload the .xlsx backup file with the original 'Enterprises', 'Attractions' and 'Protected Areas' sheets, unedited headers.");
       }
     };
     reader.readAsArrayBuffer(file);
@@ -5200,7 +5607,7 @@ function LoginScreen() {
  * ANALYTICS SCREEN: summary numbers, charts and the analytics report.
  */
 
-function AnalyticsSection({establishments, attractions, cbtos}){
+function AnalyticsSection({establishments, attractions, cbtos, protectedAreas, paOptions}){
   const REPORTS = [
     {id:"estab-muni", label:"Enterprises by Municipality", desc:"Enterprise counts per municipality with accreditation status, operating status, rooms and employees.",
      note:"Accredited / Expired / Not Accredited are computed from each enterprise's accreditation history. Rooms and employee counts exclude entries marked N/A (e.g., Tour Guides)."},
@@ -5210,6 +5617,10 @@ function AnalyticsSection({establishments, attractions, cbtos}){
      note:"Status refers to Existing, Potential or Emerging attractions as encoded in the inventory."},
     {id:"attr-cat",   label:"Attractions by Category", desc:"Attraction counts per category by status and physical condition.",
      note:"Status refers to Existing, Potential or Emerging attractions as encoded in the inventory."},
+    {id:"pa-muni",    label:"Protected Areas by Municipality", desc:"Protected areas and conservation sites per municipality by operational status and declaration status.",
+     note:"Counts come from the Protected Areas and Conservation Sites Inventory. Records with no status encoded are included in the Total only."},
+    {id:"pa-cat",     label:"Protected Areas by Category", desc:"Protected areas and conservation sites per category by operational status and declaration status.",
+     note:"Counts come from the Protected Areas and Conservation Sites Inventory. Records with no status encoded are included in the Total only."},
     {id:"cbto-muni",  label:"CBTOs by Municipality", desc:"Community-Based Tourism Organizations and their membership per municipality.",
      note:"Total Members is the sum of male and female members of each CBTO."},
   ];
@@ -5233,7 +5644,7 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const CATS = Object.keys(ATTRACTION_CATEGORIES);
 
   const munis = [...MUNICIPALITIES];
-  [...establishments, ...attractions, ...cbtos].forEach(d=>{
+  [...establishments, ...attractions, ...cbtos, ...(protectedAreas||[])].forEach(d=>{
     if(d.municipality && !munis.includes(d.municipality)) munis.push(d.municipality);
   });
 
@@ -5301,6 +5712,24 @@ function AnalyticsSection({establishments, attractions, cbtos}){
     list.filter(d=>d.selection==="Emerging").length,
   ];
 
+  // Protected Areas: choices = defaults + anything added by the user + anything found in the records
+  const paBase = mergePaOptions(paOptions);
+  const paOpt = {
+    category: [...paBase.category, ...[...new Set((protectedAreas||[]).map(d=>d.category).filter(v=>v && !paBase.category.includes(v)))]],
+    declaration: [...paBase.declaration, ...[...new Set((protectedAreas||[]).map(d=>d.declarationStatus).filter(v=>v && !paBase.declaration.includes(v)))]],
+    operational: [...paBase.operational, ...[...new Set((protectedAreas||[]).map(d=>d.operational).filter(v=>v && !paBase.operational.includes(v)))]],
+  };
+  const paList = (protectedAreas||[]).filter(d =>
+    matchSel(filters.pacategory, d.category) &&
+    matchSel(filters.padecl, d.declarationStatus||"") &&
+    matchSel(filters.paop, d.operational||"") &&
+    matchSel(filters.municipality, d.municipality));
+  const paCounts = list => [
+    list.length,
+    ...paOpt.operational.map(o=>list.filter(d=>d.operational===o).length),
+    ...paOpt.declaration.map(s=>list.filter(d=>d.declarationStatus===s).length),
+  ];
+
   if(report==="estab-muni"){
     title = "Tourism Enterprises by Municipality";
     cols = ["Municipality","Total","Primary","Secondary","Accredited","Expired","Not Accredited","Active","Not Active","Others","Rooms","Male Emp.","Female Emp.","Total Emp."];
@@ -5339,6 +5768,16 @@ function AnalyticsSection({establishments, attractions, cbtos}){
       return [c, ...attrCounts(l), ...PHYSICAL_CONDITIONS.map(p=>l.filter(d=>d.physicalCondition===p).length)];
     });
     fields = [{key:"municipality",all:"All Municipalities"},{key:"selection",all:"All Statuses"}];
+  } else if(report==="pa-muni"){
+    title = "Protected Areas and Conservation Sites by Municipality";
+    cols = ["Municipality","Total", ...paOpt.operational, ...paOpt.declaration];
+    rows = munis.map(m => [m, ...paCounts(paList.filter(d=>d.municipality===m))]);
+    fields = [{key:"pacategory",all:"All Categories"},{key:"padecl",all:"All Declaration Statuses"},{key:"paop",all:"All Operational Statuses"}];
+  } else if(report==="pa-cat"){
+    title = "Protected Areas and Conservation Sites by Category";
+    cols = ["Category","Total", ...paOpt.operational, ...paOpt.declaration];
+    rows = paOpt.category.map(c => [c, ...paCounts(paList.filter(d=>d.category===c))]);
+    fields = [{key:"municipality",all:"All Municipalities"},{key:"padecl",all:"All Declaration Statuses"},{key:"paop",all:"All Operational Statuses"}];
   } else {
     title = "Community-Based Tourism Organizations (CBTOs) by Municipality";
     cols = ["Municipality","No. of CBTOs","Male Members","Female Members","Total Members"];
@@ -5354,8 +5793,9 @@ function AnalyticsSection({establishments, attractions, cbtos}){
   const options = {
     classification: CLASSIFICATIONS, type: ALL_TYPES, estatus: ESTAB_STATUSES,
     municipality: munis, category: CATS, selection: ATTRACTION_SELECTIONS,
+    pacategory: paOpt.category, padecl: paOpt.declaration, paop: paOpt.operational,
   };
-  const FILTER_LABELS = {classification:"Classification", type:"Type", estatus:"Enterprise Status", municipality:"Municipality", category:"Category", selection:"Status"};
+  const FILTER_LABELS = {classification:"Classification", type:"Type", estatus:"Enterprise Status", municipality:"Municipality", category:"Category", selection:"Status", pacategory:"Category", padecl:"Declaration Status", paop:"Operational Status"};
   const isEstabReport = report==="estab-muni" || report==="estab-type";
   const accYearOptions = (() => {
     const ys = new Set([String(new Date().getFullYear())]);
@@ -5496,6 +5936,8 @@ function App(){
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [dirCategories, setDirCategories] = useState(DIRECTORY_CATEGORIES);
   const [arawatanThemes, setArawatanThemes] = useState({});
+  const [protectedAreas, setProtectedAreas] = useState([]);
+  const [paOptions, setPaOptions] = useState({});
   const [cloudStatus, setCloudStatus] = useState("loading");
   const [lastSaved, setLastSaved] = useState(null);
   const [cloudError, setCloudError] = useState("");
@@ -5524,6 +5966,8 @@ function App(){
         setCalendarEvents(Array.isArray(data.calendar) ? data.calendar : []);
         if(Array.isArray(data.directoryCategories) && data.directoryCategories.length) setDirCategories(data.directoryCategories);
         if(data.arawatanThemes && typeof data.arawatanThemes === "object") setArawatanThemes(data.arawatanThemes);
+        setProtectedAreas(Array.isArray(data.protectedAreas) ? data.protectedAreas : []);
+        if(data.paOptions && typeof data.paOptions === "object") setPaOptions(data.paOptions);
         if(data.updatedAt) setLastSaved(data.updatedAt);
       }
       setCloudStatus("idle");
@@ -5538,7 +5982,7 @@ function App(){
     if (!isAdmin) return;
     setCloudStatus("saving");
     try {
-      await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents, dirCategories, arawatanThemes);
+      await saveInventoryToCloud(establishments, attractions, cbtos, officers, calendarEvents, dirCategories, arawatanThemes, protectedAreas, paOptions);
       setLastSaved(new Date().toISOString());
       setCloudStatus("idle");
     } catch(err){
@@ -5597,6 +6041,9 @@ function App(){
       <button className={"section-tab " + (tab==="attractions"?"active":"")} onClick={()=>setTab("attractions")}>
         <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><span className="nav-text">Attractions</span> <span className="tab-count">{attractions.length}</span>
       </button>
+      <button className={"section-tab " + (tab==="protected"?"active":"")} onClick={()=>setTab("protected")}>
+        <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg><span className="nav-text">Protected Areas</span> <span className="tab-count">{protectedAreas.length}</span>
+      </button>
       <button className={"section-tab " + (tab==="cbtos"?"active":"")} onClick={()=>setTab("cbtos")}>
         <svg className="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8"/></svg><span className="nav-text">CBTOs</span> <span className="tab-count">{cbtos.length}</span>
       </button>
@@ -5619,6 +6066,7 @@ function App(){
     <BackupToolbar
       establishments={establishments} attractions={attractions}
       setEstablishments={setEstablishments} setAttractions={setAttractions}
+      protectedAreas={protectedAreas} setProtectedAreas={setProtectedAreas}
       cloudStatus={cloudStatus} lastSaved={lastSaved} cloudError={cloudError} onSave={handleSave}
       isAdmin={isAdmin}
     />
@@ -5632,6 +6080,9 @@ function App(){
     {tab === "attractions" && (
       <AttractionsSection data={attractions} setData={setAttractions} isAdmin={isAdmin} />
     )}
+    {tab === "protected" && (
+      <ProtectedAreasSection data={protectedAreas} setData={setProtectedAreas} isAdmin={isAdmin} options={paOptions} setOptions={setPaOptions} />
+    )}
     {tab === "cbtos" && (
       <CbtoSection data={cbtos} setData={setCbtos} isAdmin={isAdmin} />
     )}
@@ -5642,7 +6093,7 @@ function App(){
       <CalendarSection data={calendarEvents} setData={setCalendarEvents} isAdmin={isAdmin} arawatanThemes={arawatanThemes} setArawatanThemes={setArawatanThemes} />
     )}
     {tab === "analytics" && (
-      <AnalyticsSection establishments={establishments} attractions={attractions} cbtos={cbtos} />
+      <AnalyticsSection establishments={establishments} attractions={attractions} cbtos={cbtos} protectedAreas={protectedAreas} paOptions={paOptions} />
     )}
     </main>
     </div>
