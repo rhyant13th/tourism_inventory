@@ -1282,6 +1282,8 @@ function parseImportedWorkbook(wb){
       declarationDetail: String(row[PA_HEADERS[5]]||"").trim(),
       operational: matchFromList(row["Operational Status"], PA_DEFAULT_OPTIONS.operational) || "",
       description: String(row["Description"]||"").trim(),
+      latitude: String(row["Latitude"]||"").trim(),
+      longitude: String(row["Longitude"]||"").trim(),
       dateUpdated: excelValueToISODate(row["Date Updated"]) || "",
     });
   });
@@ -3066,14 +3068,14 @@ function paDetailPlaceholder(status){
 const PA_PRINT_FILTERS = [
   {key:"name", label:"Name"}, {key:"municipality", label:"Municipality"}, {key:"category", label:"Category"},
   {key:"declarationStatus", label:"Declaration Status"}, {key:"operational", label:"Operational Status"},
-  {key:"description", label:"Description"},
+  {key:"description", label:"Description"}, {key:"coordinates", label:"Coordinates"},
 ];
-const PA_HEADERS = ["No.","Name of Protected Area or Conservation Site","Municipality","Category","Declaration Status","Laws Applied / Ordinance No. / Registration","Operational Status","Description","Date Updated"];
+const PA_HEADERS = ["No.","Name of Protected Area or Conservation Site","Municipality","Category","Declaration Status","Laws Applied / Ordinance No. / Registration","Operational Status","Description","Latitude","Longitude","Date Updated"];
 
 function buildPaRows(list){
   return list.map((d,i)=>[
     i+1, d.name||"", d.municipality||"", d.category||"", d.declarationStatus||"", d.declarationDetail||"",
-    d.operational||"", d.description||"", isoToDateObj(d.dateUpdated),
+    d.operational||"", d.description||"", d.latitude||"", d.longitude||"", isoToDateObj(d.dateUpdated),
   ]);
 }
 
@@ -3082,7 +3084,8 @@ function buildPaPrint(list, filters){
   const textParts = [];
   if(q("name")) textParts.push("Name: " + q("name"));
   if(q("description")) textParts.push("Description: " + q("description"));
-  const selFilters = PA_PRINT_FILTERS.filter(fl => !["name","description"].includes(fl.key));
+  if(q("coordinates")) textParts.push("Coordinates: " + q("coordinates"));
+  const selFilters = PA_PRINT_FILTERS.filter(fl => !["name","description","coordinates"].includes(fl.key));
   const sel = printFilterSummary(selFilters, filters);
   const all = [...textParts, ...(sel==="None (all records)" ? [] : [sel])];
   return {
@@ -3091,10 +3094,10 @@ function buildPaPrint(list, filters){
     total: list.length,
     headers: PA_HEADERS,
     rows: list.map((d,i)=>[
-      i+1, d.name, d.municipality, d.category, d.declarationStatus, d.declarationDetail, d.operational, d.description,
+      i+1, d.name, d.municipality, d.category, d.declarationStatus, d.declarationDetail, d.operational, d.description, d.latitude, d.longitude,
       d.dateUpdated ? formatDateDisplay(d.dateUpdated) : ""
     ].map(printCell)),
-    colWidths: [4,16,10,12,10,15,9,20,8],
+    colWidths: [4,15,10,11,10,14,9,18,7,7,8],
     dense: false,
   };
 }
@@ -3141,7 +3144,7 @@ function SelectWithAdd({label, required, value, onChange, options, onAddOption, 
 
 const emptyProtectedArea = {
   name: "", municipality: "", category: "", declarationStatus: "", declarationDetail: "",
-  operational: "", description: "", dateUpdated: ""
+  operational: "", description: "", latitude: "", longitude: "", dateUpdated: ""
 };
 
 function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
@@ -3156,7 +3159,12 @@ function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
       alert("Please complete the name, municipality and category.");
       return;
     }
-    onSave({...f, name: f.name.trim(), declarationDetail: detailLabel ? (f.declarationDetail||"").trim() : ""});
+    const lat = String(f.latitude||"").trim(), lng = String(f.longitude||"").trim();
+    if((lat && (isNaN(Number(lat)) || Math.abs(Number(lat))>90)) || (lng && (isNaN(Number(lng)) || Math.abs(Number(lng))>180))){
+      alert("Please enter the coordinates as decimal numbers (e.g. Latitude 12.6625, Longitude 120.4855).");
+      return;
+    }
+    onSave({...f, latitude: lat, longitude: lng, name: f.name.trim(), declarationDetail: detailLabel ? (f.declarationDetail||"").trim() : ""});
   };
   return (<div>
     <div className="form-grid">
@@ -3185,6 +3193,8 @@ function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
           </Field>
         </div>
       )}
+      <Field label="Latitude"><input type="text" value={f.latitude||""} onChange={set("latitude")} placeholder="e.g. 12.6625" /></Field>
+      <Field label="Longitude"><input type="text" value={f.longitude||""} onChange={set("longitude")} placeholder="e.g. 120.4855" /></Field>
       <Field label="Date Updated">
         <input type="text" value={f.dateUpdated ? formatDateDisplay(f.dateUpdated) : ""} placeholder="Set automatically when you save" disabled readOnly />
       </Field>
@@ -3239,6 +3249,8 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
     if(nq && !(d.name||"").toLowerCase().includes(nq)) return false;
     const dq = (filters.description||"").trim().toLowerCase();
     if(dq && !((d.description||"")+" "+(d.declarationDetail||"")).toLowerCase().includes(dq)) return false;
+    const cq = (filters.coordinates||"").trim().toLowerCase();
+    if(cq && !((d.latitude||"")+" "+(d.longitude||"")).toLowerCase().includes(cq)) return false;
     if(!matchSel(filters.municipality, d.municipality)) return false;
     if(!matchSel(filters.category, d.category)) return false;
     if(!matchSel(filters.declarationStatus, d.declarationStatus||"")) return false;
@@ -3329,11 +3341,12 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
           {key:"declarationStatus", label:"Declaration Status"},
           {key:"operational", label:"Operational Status"},
           {key:"description", label:"Description", type:"search", placeholder:"Search description / laws / ordinance"},
+          {key:"coordinates", label:"Coordinates", type:"search", placeholder:"Search latitude / longitude"},
         ]} />
         <div className="table-wrap">
           <table className="table-even">
             {(() => {
-              const cols = ["Name","Municipality","Category","Declaration Status","Operational Status","Description","Date Updated","Actions"];
+              const cols = ["Name","Municipality","Category","Declaration Status","Operational Status","Description","Coordinates","Date Updated","Actions"];
               const weights = cols.map(h => h==="Description" ? 2.2 : (h==="Name" ? 1.5 : 1));
               const wSum = weights.reduce((x,y)=>x+y, 0);
               return (<React.Fragment>
@@ -3353,6 +3366,7 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
                   </td>
                   <td>{d.operational ? <Pill tone={opTone(d.operational)}>{d.operational}</Pill> : <span className="cell-sub">—</span>}</td>
                   <td>{d.description || <span className="cell-sub">—</span>}</td>
+                  <td>{(d.latitude || d.longitude) ? <div>{d.latitude || "—"}<br/>{d.longitude || "—"}</div> : <span className="cell-sub">—</span>}</td>
                   <td>{d.dateUpdated ? formatDateDisplay(d.dateUpdated) : <span className="cell-sub">—</span>}</td>
                   <td>
                     <div style={{display:"flex",gap:10}}>
@@ -3366,7 +3380,7 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
                   </td>
                 </tr>
               ))}
-              {filtered.length===0 && <tr><td colSpan="8" className="empty-row">No protected areas or conservation sites match these filters.</td></tr>}
+              {filtered.length===0 && <tr><td colSpan="9" className="empty-row">No protected areas or conservation sites match these filters.</td></tr>}
             </tbody>
           </table>
         </div>
