@@ -1280,7 +1280,7 @@ function parseImportedWorkbook(wb){
       name, municipality, category,
       declarationStatus: matchFromList(row["Declaration Status"], PA_DEFAULT_OPTIONS.declaration) || "",
       declarationDetail: String(row[PA_HEADERS[5]]||"").trim(),
-      operational: matchFromList(row["Operational Status"], PA_DEFAULT_OPTIONS.operational) || "",
+      remarks: String(row["Remarks"]||"").trim(),
       description: String(row["Description"]||"").trim(),
       latitude: String(row["Latitude"]||"").trim(),
       longitude: String(row["Longitude"]||"").trim(),
@@ -3025,7 +3025,7 @@ function AttractionsSection({data, setData, isAdmin}){
 // ======================================================================
 /**
  * PROTECTED AREAS & CONSERVATION SITES: list, dashboard, add/edit form, filters and print report.
- * Category, Declaration Status and Operational Status are dropdowns with an "Add" option; the
+ * Category and Declaration Status are dropdowns with "Add" and "Edit / Delete Choices" options; the
  * added choices are saved to the cloud together with the records (field: paOptions).
  */
 
@@ -3035,13 +3035,15 @@ const PA_DEFAULT_OPTIONS = {
     "Wildlife Sanctuaries","Bird Sanctuaries","Protected Landscapes and Seascapes","Watershed Forest Reserves"
   ],
   declaration: ["Nationally Declared","Locally Declared","Registered","Unregistered/For Validation"],
-  operational: ["Operational","Not Operational/Closed"],
 };
 
-// Merge saved options with the defaults (defaults first, then anything added by the user)
+// Merge saved options with the defaults (defaults first, then anything added by the user).
+// Once a choice has been renamed or deleted, the full list is saved (marker _v:2) and used as it is,
+// so the built-in choices can be edited or removed like any other.
 function mergePaOptions(saved){
   const out = {};
   Object.keys(PA_DEFAULT_OPTIONS).forEach(k=>{
+    if(saved && saved._v===2 && Array.isArray(saved[k])){ out[k] = saved[k].filter(Boolean); return; }
     const extra = (saved && Array.isArray(saved[k])) ? saved[k] : [];
     out[k] = [...PA_DEFAULT_OPTIONS[k], ...extra.filter(x => x && !PA_DEFAULT_OPTIONS[k].some(d => d.toLowerCase()===String(x).toLowerCase()))];
   });
@@ -3067,15 +3069,15 @@ function paDetailPlaceholder(status){
 
 const PA_PRINT_FILTERS = [
   {key:"name", label:"Name"}, {key:"municipality", label:"Municipality"}, {key:"category", label:"Category"},
-  {key:"declarationStatus", label:"Declaration Status"}, {key:"operational", label:"Operational Status"},
+  {key:"declarationStatus", label:"Declaration Status"}, {key:"remarks", label:"Remarks"},
   {key:"description", label:"Description"}, {key:"coordinates", label:"Coordinates"},
 ];
-const PA_HEADERS = ["No.","Name of Protected Area or Conservation Site","Municipality","Category","Declaration Status","Laws Applied / Ordinance No. / Registration","Operational Status","Description","Latitude","Longitude","Date Updated"];
+const PA_HEADERS = ["No.","Name of Protected Area or Conservation Site","Municipality","Category","Declaration Status","Laws Applied / Ordinance No. / Registration","Remarks","Description","Latitude","Longitude","Date Updated"];
 
 function buildPaRows(list){
   return list.map((d,i)=>[
     i+1, d.name||"", d.municipality||"", d.category||"", d.declarationStatus||"", d.declarationDetail||"",
-    d.operational||"", d.description||"", d.latitude||"", d.longitude||"", isoToDateObj(d.dateUpdated),
+    d.remarks||"", d.description||"", d.latitude||"", d.longitude||"", isoToDateObj(d.dateUpdated),
   ]);
 }
 
@@ -3083,9 +3085,10 @@ function buildPaPrint(list, filters){
   const q = (k) => (filters && typeof filters[k]==="string" && filters[k].trim()) ? filters[k].trim() : "";
   const textParts = [];
   if(q("name")) textParts.push("Name: " + q("name"));
+  if(q("remarks")) textParts.push("Remarks: " + q("remarks"));
   if(q("description")) textParts.push("Description: " + q("description"));
   if(q("coordinates")) textParts.push("Coordinates: " + q("coordinates"));
-  const selFilters = PA_PRINT_FILTERS.filter(fl => !["name","description","coordinates"].includes(fl.key));
+  const selFilters = PA_PRINT_FILTERS.filter(fl => !["name","remarks","description","coordinates"].includes(fl.key));
   const sel = printFilterSummary(selFilters, filters);
   const all = [...textParts, ...(sel==="None (all records)" ? [] : [sel])];
   return {
@@ -3094,10 +3097,10 @@ function buildPaPrint(list, filters){
     total: list.length,
     headers: PA_HEADERS,
     rows: list.map((d,i)=>[
-      i+1, d.name, d.municipality, d.category, d.declarationStatus, d.declarationDetail, d.operational, d.description, d.latitude, d.longitude,
+      i+1, d.name, d.municipality, d.category, d.declarationStatus, d.declarationDetail, d.remarks, d.description, d.latitude, d.longitude,
       d.dateUpdated ? formatDateDisplay(d.dateUpdated) : ""
     ].map(printCell)),
-    colWidths: [4,15,10,11,10,14,9,18,7,7,8],
+    colWidths: [4,14,10,11,10,13,12,17,7,7,8],
     dense: false,
   };
 }
@@ -3122,10 +3125,29 @@ function ExpandableText({text, limit=140, prefix}){
 }
 
 // Dropdown that also lets the user type a NEW choice ("Add ...") and use it right away.
-function SelectWithAdd({label, required, value, onChange, options, onAddOption, addLabel, placeholder}){
+function SelectWithAdd({label, required, value, onChange, options, onAddOption, addLabel, placeholder, onRenameOption, onDeleteOption, usage}){
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
+  const [managing, setManaging] = useState(false);
+  const [editing, setEditing] = useState(null);     // the choice being renamed
+  const [editText, setEditText] = useState("");
+  const [mErr, setMErr] = useState("");
+  const canManage = !!(onRenameOption && onDeleteOption);
+  const saveRename = () => {
+    const nn = editText.trim();
+    const msg = onRenameOption(editing, nn);
+    if(msg){ setMErr(msg); return; }
+    if(value===editing && nn) onChange(nn);       // keep the form pointing at the renamed choice
+    setEditing(null); setEditText(""); setMErr("");
+  };
+  const removeChoice = (o) => {
+    if(!window.confirm('Delete the choice "' + o + '"?')) return;
+    const msg = onDeleteOption(o);
+    if(msg){ setMErr(msg); return; }
+    if(value===o) onChange("");
+    setMErr("");
+  };
   const list = (!value || options.includes(value)) ? options : [...options, value];
   const commit = () => {
     const name = text.trim();
@@ -3141,8 +3163,31 @@ function SelectWithAdd({label, required, value, onChange, options, onAddOption, 
       {list.map(o=><option key={o} value={o}>{o}</option>)}
     </select>
     {!adding && (
-      <div style={{display:"flex", gap:6, marginTop:6}}>
+      <div style={{display:"flex", gap:6, marginTop:6, flexWrap:"wrap"}}>
         <button type="button" className="btn btn-outline-teal btn-sm" onClick={()=>setAdding(true)}><Icon d={ICONS.plus} size={12} color="#1C6B6E" /> {addLabel}</button>
+        {canManage && <button type="button" className="btn btn-sm" onClick={()=>{ setManaging(m=>!m); setEditing(null); setMErr(""); }}><Icon d={ICONS.edit} size={12} color="#1C6B6E" /> {managing ? "Close" : "Edit / Delete Choices"}</button>}
+      </div>
+    )}
+    {canManage && managing && (
+      <div style={{marginTop:6, padding:8, border:"1px solid var(--border)", borderRadius:8, background:"var(--bg, #f7f8f8)"}}>
+        <div style={{fontSize:11, fontWeight:700, color:"var(--subtext)", marginBottom:4}}>Edit or delete choices</div>
+        {options.length===0 && <div style={{fontSize:12, color:"var(--subtext)"}}>No choices yet.</div>}
+        {options.map(o=>(
+          <div key={o} style={{display:"flex", alignItems:"center", gap:8, padding:"4px 0", borderTop:"1px solid var(--border)"}}>
+            {editing===o ? (<>
+              <input type="text" value={editText} autoFocus style={{flex:1}}
+                onChange={e=>{ setEditText(e.target.value); setMErr(""); }}
+                onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); saveRename(); } if(e.key==="Escape"){ setEditing(null); setMErr(""); } }} />
+              <button type="button" className="btn btn-primary btn-sm" onClick={saveRename}>Save</button>
+              <button type="button" className="btn btn-sm" onClick={()=>{ setEditing(null); setMErr(""); }}>Cancel</button>
+            </>) : (<>
+              <span style={{flex:1, fontSize:13}}>{o}{usage ? <span className="cell-sub"> ({usage(o)} record{usage(o)===1?"":"s"})</span> : null}</span>
+              <button type="button" className="btn-ghost" title="Rename" onClick={()=>{ setEditing(o); setEditText(o); setMErr(""); }}><Icon d={ICONS.edit} color="#1C6B6E" /></button>
+              <button type="button" className="btn-ghost" title="Delete" onClick={()=>removeChoice(o)}><Icon d={ICONS.trash} color="#A8442D" /></button>
+            </>)}
+          </div>
+        ))}
+        {mErr && <div style={{fontSize:12, color:"var(--danger)", marginTop:4}}>{mErr}</div>}
       </div>
     )}
     {adding && (
@@ -3163,10 +3208,10 @@ function SelectWithAdd({label, required, value, onChange, options, onAddOption, 
 
 const emptyProtectedArea = {
   name: "", municipality: "", category: "", declarationStatus: "", declarationDetail: "",
-  operational: "", description: "", latitude: "", longitude: "", dateUpdated: ""
+  remarks: "", description: "", latitude: "", longitude: "", dateUpdated: ""
 };
 
-function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
+function ProtectedAreaForm({initial, options, onAddOption, onRenameOption, onDeleteOption, usage, onCancel, onSave}){
   const [f, setF] = useState(() => ({...emptyProtectedArea, ...(initial||{})}));
   const set = (k) => (e) => {
     const v = e && e.target ? e.target.value : e;
@@ -3185,7 +3230,8 @@ function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
     } else if(isNaN(Number(lat)) || Math.abs(Number(lat))>90 || isNaN(Number(lng)) || Math.abs(Number(lng))>180){
       if(!window.confirm("Warning: the coordinates are not in decimal format (e.g. Latitude 12.6625, Longitude 120.4855).\n\nSave this record anyway?")) return;
     }
-    onSave({...f, latitude: lat, longitude: lng, name: f.name.trim(), declarationDetail: detailLabel ? (f.declarationDetail||"").trim() : ""});
+    const { operational: _removed, ...clean } = f;   // Operational Status no longer exists
+    onSave({...clean, latitude: lat, longitude: lng, name: f.name.trim(), declarationDetail: detailLabel ? (f.declarationDetail||"").trim() : ""});
   };
   return (<div>
     <div className="form-grid">
@@ -3201,12 +3247,12 @@ function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
         </select>
       </Field>
       <SelectWithAdd label="Category" required value={f.category} onChange={set("category")}
-        options={options.category} onAddOption={(n)=>onAddOption("category", n)} addLabel="Add Category" placeholder="Select category" />
+        options={options.category} onAddOption={(n)=>onAddOption("category", n)} addLabel="Add Category" placeholder="Select category"
+        onRenameOption={(o,n)=>onRenameOption("category", o, n)} onDeleteOption={(o)=>onDeleteOption("category", o)} usage={(o)=>usage("category", o)} />
       <SelectWithAdd label="Declaration Status" value={f.declarationStatus}
         onChange={(v)=>setF(prev=>({...prev, declarationStatus: v}))}
-        options={options.declaration} onAddOption={(n)=>onAddOption("declaration", n)} addLabel="Add Declaration Status" placeholder="Select status" />
-      <SelectWithAdd label="Operational Status" value={f.operational} onChange={set("operational")}
-        options={options.operational} onAddOption={(n)=>onAddOption("operational", n)} addLabel="Add Operational Status" placeholder="Select status" />
+        options={options.declaration} onAddOption={(n)=>onAddOption("declaration", n)} addLabel="Add Declaration Status" placeholder="Select status"
+        onRenameOption={(o,n)=>onRenameOption("declaration", o, n)} onDeleteOption={(o)=>onDeleteOption("declaration", o)} usage={(o)=>usage("declaration", o)} />
       {detailLabel && (
         <div style={{gridColumn:"1 / -1"}}>
           <Field label={detailLabel}>
@@ -3222,6 +3268,11 @@ function ProtectedAreaForm({initial, options, onAddOption, onCancel, onSave}){
       <div style={{gridColumn:"1 / -1"}}>
         <Field label="Description">
           <textarea rows={4} value={f.description||""} onChange={set("description")} placeholder="Describe the protected area or conservation site" style={{width:"100%", resize:"vertical"}} />
+        </Field>
+      </div>
+      <div style={{gridColumn:"1 / -1"}}>
+        <Field label="Remarks">
+          <textarea rows={3} value={f.remarks||""} onChange={set("remarks")} placeholder="Any remarks or notes about this record" style={{width:"100%", resize:"vertical"}} />
         </Field>
       </div>
     </div>
@@ -3246,28 +3297,62 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
     return {
       category: [...base.category, ...extra("category","category")],
       declaration: [...base.declaration, ...extra("declaration","declarationStatus")],
-      operational: [...base.operational, ...extra("operational","operational")],
     };
   }, [savedOptions, data]);
+
+  // Operational Status was removed: clear it from any existing record
+  useEffect(()=>{
+    if(data.some(d => d && Object.prototype.hasOwnProperty.call(d, "operational"))){
+      setData(prev => prev.map(d => { const { operational, ...rest } = d; return rest; }));
+    }
+  }, [data]);
 
   const addOption = (kind, name) => {
     setOptions(prev => {
       const cur = mergePaOptions(prev);
       if(cur[kind].some(o=>o.toLowerCase()===name.toLowerCase())) return prev;
-      return {...cur, [kind]: [...cur[kind], name]};
+      return {...cur, [kind]: [...cur[kind], name], _v:2};
     });
+  };
+
+  // Edit / delete the choices of the Category and Declaration Status dropdowns
+  const choiceField = {category:"category", declaration:"declarationStatus"};
+  const countUse = (kind, name) => data.filter(d => d[choiceField[kind]]===name).length;
+  const renameOption = (kind, oldName, newName) => {
+    const nn = String(newName||"").trim();
+    if(!nn) return "Please type a name.";
+    if(nn===oldName) return "";
+    if(options[kind].some(o => o!==oldName && o.toLowerCase()===nn.toLowerCase())) return "That choice already exists.";
+    setOptions(prev => {
+      const cur = mergePaOptions(prev);
+      const list = cur[kind].includes(oldName) ? cur[kind].map(o => o===oldName ? nn : o) : [...cur[kind], nn];
+      return {...cur, [kind]: list, _v:2};
+    });
+    const field = choiceField[kind];
+    setData(prev => prev.map(d => d[field]===oldName ? {...d, [field]: nn} : d));   // records follow the new name
+    return "";
+  };
+  const deleteOption = (kind, name) => {
+    const n = countUse(kind, name);
+    if(n>0) return 'Cannot delete "' + name + '": it is used by ' + n + ' record' + (n>1 ? "s" : "") + '. Change those records first, or rename the choice instead.';
+    setOptions(prev => {
+      const cur = mergePaOptions(prev);
+      return {...cur, [kind]: cur[kind].filter(o => o!==name), _v:2};
+    });
+    return "";
   };
 
   const filterOptions = useMemo(()=>({
     municipality: MUNICIPALITIES,
     category: options.category,
     declarationStatus: options.declaration,
-    operational: options.operational,
   }), [options]);
 
   const filtered = useMemo(()=>data.filter(d=>{
     const nq = (filters.name||"").trim().toLowerCase();
     if(nq && !(d.name||"").toLowerCase().includes(nq)) return false;
+    const rq = (filters.remarks||"").trim().toLowerCase();
+    if(rq && !(d.remarks||"").toLowerCase().includes(rq)) return false;
     const dq = (filters.description||"").trim().toLowerCase();
     if(dq && !((d.description||"")+" "+(d.declarationDetail||"")).toLowerCase().includes(dq)) return false;
     const cq = (filters.coordinates||"").trim().toLowerCase();
@@ -3275,7 +3360,6 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
     if(!matchSel(filters.municipality, d.municipality)) return false;
     if(!matchSel(filters.category, d.category)) return false;
     if(!matchSel(filters.declarationStatus, d.declarationStatus||"")) return false;
-    if(!matchSel(filters.operational, d.operational||"")) return false;
     return true;
   }), [data, filters]);
 
@@ -3286,7 +3370,6 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
   const byMunicipality = useMemo(()=>countBy(d=>d.municipality, "Not Specified"), [data]);
   const byCategory = useMemo(()=>countBy(d=>d.category, "Not Specified"), [data]);
   const byDeclaration = useMemo(()=>countBy(d=>d.declarationStatus, "Not Specified"), [data]);
-  const byOperational = useMemo(()=>countBy(d=>d.operational, "Not Specified"), [data]);
 
   const save = (f) => {
     const stamped = {...f, dateUpdated: dateToISO(new Date())};   // Date Updated is set automatically on every save
@@ -3301,8 +3384,6 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
     setData(prev => prev.filter(d => d.id !== toDelete.id));
     setToDelete(null);
   };
-
-  const opTone = (s) => !s ? "grey" : (/^not|closed/i.test(s) ? "danger" : "teal");
 
   return (<div>
     <div className="toolbar-row">
@@ -3326,13 +3407,8 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
       <div>
         <div className="stat-cards">
           <StatCard label="Total Protected Areas & Conservation Sites" value={data.length} />
-          <StatCard label="Operational" value={data.filter(d=>d.operational==="Operational").length} />
-          <StatCard label="Not Operational / Closed" value={data.filter(d=>/^not|closed/i.test(d.operational||"")).length} />
           <StatCard label="Municipalities Covered" value={new Set(data.map(d=>d.municipality).filter(Boolean)).size} />
-          <StatCard label="Nationally Declared" value={data.filter(d=>d.declarationStatus==="Nationally Declared").length} />
-          <StatCard label="Locally Declared" value={data.filter(d=>d.declarationStatus==="Locally Declared").length} />
-          <StatCard label="Registered" value={data.filter(d=>d.declarationStatus==="Registered").length} />
-          <StatCard label="Unregistered / For Validation" value={data.filter(d=>d.declarationStatus==="Unregistered/For Validation").length} />
+          {options.declaration.map(s => <StatCard key={s} label={s} value={data.filter(d=>d.declarationStatus===s).length} />)}
         </div>
         <div className="charts-grid">
           <div className="panel">
@@ -3347,10 +3423,6 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
             <div className="panel-title">Per Declaration Status</div>
             <BarList data={byDeclaration} color="#0E3B3C" />
           </div>
-          <div className="panel span-2">
-            <div className="panel-title">Per Operational Status</div>
-            <BarList data={byOperational} color="#C08A2E" />
-          </div>
         </div>
       </div>
     ) : (
@@ -3360,15 +3432,15 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
           {key:"municipality", label:"Municipality"},
           {key:"category", label:"Category"},
           {key:"declarationStatus", label:"Declaration Status"},
-          {key:"operational", label:"Operational Status"},
+          {key:"remarks", label:"Remarks", type:"search", placeholder:"Search remarks"},
           {key:"description", label:"Description", type:"search", placeholder:"Search description / laws / ordinance"},
           {key:"coordinates", label:"Coordinates", type:"search", placeholder:"Search latitude / longitude"},
         ]} />
         <div className="table-wrap">
           <table className="table-even">
             {(() => {
-              const cols = ["Name","Municipality","Category","Declaration Status","Operational Status","Description","Coordinates","Date Updated","Actions"];
-              const weights = cols.map(h => h==="Description" ? 2.2 : (h==="Name" ? 1.4 : (h==="Declaration Status" ? 1.6 : (h==="Operational Status" ? 1.2 : 1))));
+              const cols = ["Name","Municipality","Category","Declaration Status","Remarks","Description","Coordinates","Date Updated","Actions"];
+              const weights = cols.map(h => h==="Description" ? 2.2 : (h==="Name" ? 1.4 : (h==="Declaration Status" ? 1.6 : (h==="Remarks" ? 1.6 : 1))));
               const wSum = weights.reduce((x,y)=>x+y, 0);
               return (<React.Fragment>
                 <colgroup>{cols.map((h,i)=><col key={h} style={{width:(weights[i]*100/wSum).toFixed(4)+"%"}} />)}</colgroup>
@@ -3385,7 +3457,7 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
                     {d.declarationStatus ? <Pill tone={declarationTone(d.declarationStatus)}>{d.declarationStatus}</Pill> : <span className="cell-sub">—</span>}
                     {d.declarationDetail && <div className="cell-sub" style={{marginTop:4}}><ExpandableText text={d.declarationDetail} limit={70} prefix={paDetailLabel(d.declarationStatus) + ": "} /></div>}
                   </td>
-                  <td>{d.operational ? <Pill tone={opTone(d.operational)}>{d.operational}</Pill> : <span className="cell-sub">—</span>}</td>
+                  <td>{d.remarks ? <ExpandableText text={d.remarks} limit={100} /> : <span className="cell-sub">—</span>}</td>
                   <td>{d.description ? <ExpandableText text={d.description} limit={160} /> : <span className="cell-sub">—</span>}</td>
                   <td>{(d.latitude || d.longitude) ? <div>{d.latitude || "—"}<br/>{d.longitude || "—"}</div> : <span className="cell-sub">—</span>}</td>
                   <td>{d.dateUpdated ? formatDateDisplay(d.dateUpdated) : <span className="cell-sub">—</span>}</td>
@@ -3411,7 +3483,7 @@ function ProtectedAreasSection({data, setData, isAdmin, options: savedOptions, s
     {printing && <RecordsPrintReport {...buildPaPrint(filtered, filters)} onDone={()=>setPrinting(false)} />}
     {modal && isAdmin && (
       <Modal title={modal.mode==="edit" ? "Edit Protected Area / Conservation Site" : "Add Protected Area / Conservation Site"} onClose={()=>setModal(null)}>
-        <ProtectedAreaForm initial={modal.item} options={options} onAddOption={addOption} onCancel={()=>setModal(null)} onSave={save} />
+        <ProtectedAreaForm initial={modal.item} options={options} onAddOption={addOption} onRenameOption={renameOption} onDeleteOption={deleteOption} usage={countUse} onCancel={()=>setModal(null)} onSave={save} />
       </Modal>
     )}
     {toDelete && (
@@ -5652,9 +5724,9 @@ function AnalyticsSection({establishments, attractions, cbtos, protectedAreas, p
      note:"Status refers to Existing, Potential or Emerging attractions as encoded in the inventory."},
     {id:"attr-cat",   label:"Attractions by Category", desc:"Attraction counts per category by status and physical condition.",
      note:"Status refers to Existing, Potential or Emerging attractions as encoded in the inventory."},
-    {id:"pa-muni",    label:"Protected Areas by Municipality", desc:"Protected areas and conservation sites per municipality by operational status and declaration status.",
+    {id:"pa-muni",    label:"Protected Areas by Municipality", desc:"Protected areas and conservation sites per municipality by declaration status.",
      note:"Counts come from the Protected Areas and Conservation Sites Inventory. Records with no status encoded are included in the Total only."},
-    {id:"pa-cat",     label:"Protected Areas by Category", desc:"Protected areas and conservation sites per category by operational status and declaration status.",
+    {id:"pa-cat",     label:"Protected Areas by Category", desc:"Protected areas and conservation sites per category by declaration status.",
      note:"Counts come from the Protected Areas and Conservation Sites Inventory. Records with no status encoded are included in the Total only."},
     {id:"cbto-muni",  label:"CBTOs by Municipality", desc:"Community-Based Tourism Organizations and their membership per municipality.",
      note:"Total Members is the sum of male and female members of each CBTO."},
@@ -5752,16 +5824,13 @@ function AnalyticsSection({establishments, attractions, cbtos, protectedAreas, p
   const paOpt = {
     category: [...paBase.category, ...[...new Set((protectedAreas||[]).map(d=>d.category).filter(v=>v && !paBase.category.includes(v)))]],
     declaration: [...paBase.declaration, ...[...new Set((protectedAreas||[]).map(d=>d.declarationStatus).filter(v=>v && !paBase.declaration.includes(v)))]],
-    operational: [...paBase.operational, ...[...new Set((protectedAreas||[]).map(d=>d.operational).filter(v=>v && !paBase.operational.includes(v)))]],
   };
   const paList = (protectedAreas||[]).filter(d =>
     matchSel(filters.pacategory, d.category) &&
     matchSel(filters.padecl, d.declarationStatus||"") &&
-    matchSel(filters.paop, d.operational||"") &&
     matchSel(filters.municipality, d.municipality));
   const paCounts = list => [
     list.length,
-    ...paOpt.operational.map(o=>list.filter(d=>d.operational===o).length),
     ...paOpt.declaration.map(s=>list.filter(d=>d.declarationStatus===s).length),
   ];
 
@@ -5805,14 +5874,14 @@ function AnalyticsSection({establishments, attractions, cbtos, protectedAreas, p
     fields = [{key:"municipality",all:"All Municipalities"},{key:"selection",all:"All Statuses"}];
   } else if(report==="pa-muni"){
     title = "Protected Areas and Conservation Sites by Municipality";
-    cols = ["Municipality","Total", ...paOpt.operational, ...paOpt.declaration];
+    cols = ["Municipality","Total", ...paOpt.declaration];
     rows = munis.map(m => [m, ...paCounts(paList.filter(d=>d.municipality===m))]);
-    fields = [{key:"pacategory",all:"All Categories"},{key:"padecl",all:"All Declaration Statuses"},{key:"paop",all:"All Operational Statuses"}];
+    fields = [{key:"pacategory",all:"All Categories"},{key:"padecl",all:"All Declaration Statuses"}];
   } else if(report==="pa-cat"){
     title = "Protected Areas and Conservation Sites by Category";
-    cols = ["Category","Total", ...paOpt.operational, ...paOpt.declaration];
+    cols = ["Category","Total", ...paOpt.declaration];
     rows = paOpt.category.map(c => [c, ...paCounts(paList.filter(d=>d.category===c))]);
-    fields = [{key:"municipality",all:"All Municipalities"},{key:"padecl",all:"All Declaration Statuses"},{key:"paop",all:"All Operational Statuses"}];
+    fields = [{key:"municipality",all:"All Municipalities"},{key:"padecl",all:"All Declaration Statuses"}];
   } else {
     title = "Community-Based Tourism Organizations (CBTOs) by Municipality";
     cols = ["Municipality","No. of CBTOs","Male Members","Female Members","Total Members"];
@@ -5828,9 +5897,9 @@ function AnalyticsSection({establishments, attractions, cbtos, protectedAreas, p
   const options = {
     classification: CLASSIFICATIONS, type: ALL_TYPES, estatus: ESTAB_STATUSES,
     municipality: munis, category: CATS, selection: ATTRACTION_SELECTIONS,
-    pacategory: paOpt.category, padecl: paOpt.declaration, paop: paOpt.operational,
+    pacategory: paOpt.category, padecl: paOpt.declaration,
   };
-  const FILTER_LABELS = {classification:"Classification", type:"Type", estatus:"Enterprise Status", municipality:"Municipality", category:"Category", selection:"Status", pacategory:"Category", padecl:"Declaration Status", paop:"Operational Status"};
+  const FILTER_LABELS = {classification:"Classification", type:"Type", estatus:"Enterprise Status", municipality:"Municipality", category:"Category", selection:"Status", pacategory:"Category", padecl:"Declaration Status"};
   const isEstabReport = report==="estab-muni" || report==="estab-type";
   const accYearOptions = (() => {
     const ys = new Set([String(new Date().getFullYear())]);
@@ -6007,8 +6076,11 @@ function App(){
         setCalendarEvents(Array.isArray(data.calendar) ? data.calendar : []);
         if(Array.isArray(data.directoryCategories) && data.directoryCategories.length) setDirCategories(data.directoryCategories);
         if(data.arawatanThemes && typeof data.arawatanThemes === "object") setArawatanThemes(data.arawatanThemes);
-        setProtectedAreas(Array.isArray(data.protectedAreas) ? data.protectedAreas : []);
-        if(data.paOptions && typeof data.paOptions === "object") setPaOptions(data.paOptions);
+        const loadedPa = Array.isArray(data.protectedAreas) ? data.protectedAreas : [];
+        const hadOperational = loadedPa.some(d => d && Object.prototype.hasOwnProperty.call(d, "operational"));
+        setProtectedAreas(loadedPa.map(d => { const { operational, ...rest } = d; return rest; }));   // Operational Status removed
+        if(data.paOptions && typeof data.paOptions === "object"){ const { operational, ...po } = data.paOptions; setPaOptions(po); }
+        if(hadOperational) baselineRef.current = "cleanup";   // forces one auto-save so the cloud copy is cleaned too
         if(data.updatedAt) setLastSaved(data.updatedAt);
       }
       setCloudStatus("idle");
